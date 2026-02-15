@@ -81,7 +81,7 @@ namespace hdt
 			case XMLReader::Inspected::StartTag:
 				if (reader.GetLocalName() == "logLevel")
 					spdlog::default_logger()->set_level(static_cast<spdlog::level::level_enum>(reader.readInt()));
-				if (reader.GetLocalName() == "flushLogLevel")
+				else if (reader.GetLocalName() == "flushLogLevel")
 					spdlog::default_logger()->flush_on(static_cast<spdlog::level::level_enum>(reader.readInt()));
 				else if (reader.GetLocalName() == "enableNPCFaceParts")
 					ActorManager::instance()->m_skinNPCFaceParts = reader.readBool();
