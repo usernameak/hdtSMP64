@@ -80,182 +80,80 @@ namespace hdt
 		}
 	}
 
-#if 0
-	RE::NiTexturePtr* GetTextureFromIndex(RE::BSLightingShaderMaterial* material, uint32_t index)
+	static void DumpNodeChildren(RE::NiAVObject* node, uint32_t indent = 0)
 	{
-		switch (index)
-		{
-		case 0:
-			return &material->texture1;
-			break;
-		case 1:
-			return &material->texture2;
-			break;
-		case 2:
-		{
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kFaceGen)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialFacegen*>(material)->unkB0;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kGlowMap)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialFacegen*>(material)->unkB0;
-			}
-			return &material->texture3;
-		}
-		break;
-		case 3:
-		{
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kFaceGen)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialFacegen*>(material)->unkA8;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kParallax)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialParallax*>(material)->unkA0;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kParallax || material->GetFeature() ==
-				RE::BSShaderMaterial::Feature::kParallaxOcc)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialParallaxOcc*>(material)->unkA0;
-			}
-		}
-		break;
-		case 4:
-		{
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kEye)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialEye*>(material)->unkA0;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kEnvironmentMap)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialEnvmap*>(material)->unkA0;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kMultilayerParallax)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material)->unkA8;
-			}
-		}
-		break;
-		case 5:
-		{
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kEye)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialEye*>(material)->unkA8;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kEnvironmentMap)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialEnvmap*>(material)->unkA0;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kMultilayerParallax)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material)->unkB0;
-			}
-		}
-		break;
-		case 6:
-		{
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kFaceGen)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialFacegen*>(material)->renderedTexture;
-			}
-			if (material->GetFeature() == RE::BSShaderMaterial::Feature::kMultilayerParallax)
-			{
-				return &static_cast<RE::BSLightingShaderMaterialMultiLayerParallax*>(material)->unkA0;
-			}
-		}
-		break;
-		case 7:
-			return &material->texture4;
-			break;
-		}
-
-		return nullptr;
-	}
-#endif
-
-	void DumpNodeChildren(RE::NiAVObject* node)
-	{
-#if 0
-		_MESSAGE("{%s} {%s} {%X} [%f, %f, %f]", node->GetRTTI()->name, node->name.c_str(), node, node->world.translate.x, node->world.translate.y, node->world.translate.z);
+		spdlog::info("{:{}s}{} {{{}}} {{{:X}}} [{:f}, {:f}, {:f}]", "", indent, node->GetRTTI()->name, node->name.c_str(), (uintptr_t)node, node->world.translate.x, node->world.translate.y, node->world.translate.z);
 		if (node->extraDataSize > 0)
 		{
-			gLog.Indent();
+			indent += 4;
 			for (uint16_t i = 0; i < node->extraDataSize; i++)
 			{
-				_MESSAGE("{%s} {%s} {%X}", node->extra[i]->GetRTTI()->name, node->extra[i]->name, node);
+				spdlog::info("{:{}s}{} {{{}}} {{{:X}}}", "", indent, node->extra[i]->GetRTTI()->name, node->extra[i]->name.c_str(), (uintptr_t)node->extra[i]);
 			}
-			gLog.Outdent();
+			indent -= 4;
 		}
 
 		RE::NiNode* niNode = node->AsNode();
 		if (niNode && niNode->children.size() > 0)
 		{
-			gLog.Indent();
+			indent += 4;
 			for (int i = 0; i < niNode->children.size(); i++)
 			{
 				RE::NiAVObject* object = niNode->children[i].get();
-				if (object)
+				if (!object)
+					continue;
+
+				RE::NiNode* childNode = object->AsNode();
+				RE::BSGeometry* geometry = object->AsGeometry();
+				if (geometry)
 				{
-					RE::NiNode* childNode = object->AsNode();
-					RE::BSGeometry* geometry = object->AsGeometry();
-					if (geometry)
+					spdlog::info("{:{}s}{} {{{}}} {{{:X}}} [{:f}, {:f}, {:f}] - Geometry", "", indent, object->GetRTTI()->name, object->name.c_str(), (uintptr_t)object, geometry->world.translate.x, geometry->world.translate.y, geometry->world.translate.z);
+					if (geometry->skinInstance && geometry->skinInstance->skinData)
 					{
-						_MESSAGE("{%s} {%s} {%X} [%f, %f, %f] - Geometry", object->GetRTTI()->name, object->name.c_str(), object, geometry->world.translate.x, geometry->world.translate.y, geometry->world.translate.z);
-						if (geometry->skinInstance && geometry->skinInstance->skinData)
+						indent += 4;
+						for (int i = 0; i < geometry->skinInstance->skinData->bones; i++)
 						{
-							gLog.Indent();
-							for (int i = 0; i < geometry->skinInstance->skinData->bones; i++)
-							{
-								auto *bone = geometry->skinInstance->bones[i];
-								_MESSAGE("Bone %d - {%s} {%s} {%X} [%f, %f, %f]", i, bone->GetRTTI()->name, bone->name.c_str(), bone, bone->world.translate.x, bone->world.translate.y, bone->world.translate.z);
-							}
-							gLog.Outdent();
+							auto *bone = geometry->skinInstance->bones[i];
+							spdlog::info("{:{}s}Bone {} - {{{}}} {{{}}} {{{:X}}} [{:f}, {:f}, {:f}]", "", indent, i, bone->GetRTTI()->name, bone->name.c_str(), (uintptr_t)bone, bone->world.translate.x, bone->world.translate.y, bone->world.translate.z);
 						}
-						RE::BSShaderProperty *shaderProperty = netimmerse_cast<RE::BSShaderProperty *>(geometry->properties[RE::BSGeometry::States::kEffect].get());
-						if (shaderProperty)
-						{
-							RE::BSLightingShaderProperty* lightingShader = netimmerse_cast<RE::BSLightingShaderProperty *>(shaderProperty);
-							if (lightingShader)
-							{
-								RE::BSLightingShaderMaterial* material = static_cast<RE::BSLightingShaderMaterial*>(lightingShader->material);
+						indent -= 4;
+					}
 
-								gLog.Indent();
-								for (int i = 0; i < RE::BSTextureSet::Textures::kTotal; ++i)
+					RE::BSShaderProperty *shaderProperty = netimmerse_cast<RE::BSShaderProperty *>(geometry->properties[RE::BSGeometry::States::kEffect].get());
+					if (shaderProperty)
+					{
+						RE::BSLightingShaderProperty* lightingShader = netimmerse_cast<RE::BSLightingShaderProperty *>(shaderProperty);
+						if (lightingShader)
+						{
+							RE::BSLightingShaderMaterial* material = static_cast<RE::BSLightingShaderMaterial*>(lightingShader->material);
+
+							indent += 4;
+							for (int i = 0; i < RE::BSTextureSet::Textures::kTotal; ++i)
+							{
+								const char* texturePath = material->textureSet->GetTexturePath((RE::BSTextureSet::Textures::Texture)i);
+								if (!texturePath)
 								{
-									const char* texturePath = material->textureSet->GetTexturePath((RE::BSTextureSet::Textures::Texture)i);
-									if (!texturePath)
-									{
-										continue;
-									}
-
-									const char* textureName = "";
-									RE::NiTexture* texture = GetTextureFromIndex(material, i);
-									if (texture && texture->get())
-									{
-										textureName = texture->get()->name;
-									}
-
-									_MESSAGE("Texture %d - %s (%s)", i, texturePath, textureName);
+									continue;
 								}
-								_MESSAGE("Flags - %08X %08X", lightingShader->shaderFlags1, lightingShader->shaderFlags2);
-								gLog.Outdent();
+
+								spdlog::info("{:{}s}Texture {} - {}", "", indent, i, texturePath);
 							}
+							spdlog::info("{:{}s}Flags - {:016X}", "", indent, lightingShader->flags.underlying());
+							indent -= 4;
 						}
-					}
-					else if (childNode)
-					{
-						DumpNodeChildren(childNode);
-					}
-					else
-					{
-						_MESSAGE("{%s} {%s} {%X} [%f, %f, %f]", object->GetRTTI()->name, object->name.c_str(), object, object->world.translate.x, object->world.translate.y, object->world.translate.z);
 					}
 				}
+				else if (childNode)
+				{
+					DumpNodeChildren(childNode, indent);
+				}
+				else
+				{
+					spdlog::info("{:{}s}{} {{{}}} {{{:X}}} [{:f}, {:f}, {:f}]", "", indent, object->GetRTTI()->name, object->name.c_str(), (uintptr_t)object, object->world.translate.x, object->world.translate.y, object->world.translate.z);
+				}
 			}
-			gLog.Outdent();
+			indent -= 4;
 		}
-#endif
 	}
 
 	void SMPDebug_PrintDetailed(bool includeItems)
