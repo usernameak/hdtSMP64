@@ -102,6 +102,17 @@ __kernel void updateVertices(
 		}
 #endif
 		m_collisionShape = &m_bulletShape;
+
+		// usernameak [BEGIN]: because it should always have CF_KINEMATIC_OBJECT
+		// (or assertions fail inside Bullet), but we still need to distinguish
+		// object statuses, so to avoid dynamic casts, we'll store CLASS_ID in
+		// user index
+
+		setUserIndex(CLASS_ID);
+
+		setCollisionFlags(CF_KINEMATIC_OBJECT);
+
+		// usernameak [END]
 	}
 
 	SkinnedMeshBody::~SkinnedMeshBody()

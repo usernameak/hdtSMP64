@@ -185,7 +185,7 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 			return userData->flexible(userData->m_vertices[n->vertex]);
 		});
 
-		userData->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
+		userData->m_shouldIntegrate = m_tree.isKinematic;
 
 		m_tree.exportColliders(m_colliders);
 #ifdef CUDA
@@ -312,7 +312,7 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 			return k / 3;
 		});
 
-		userData->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
+		userData->m_shouldIntegrate = m_tree.isKinematic;
 
 		m_tree.exportColliders(m_colliders);
 #ifdef CUDA

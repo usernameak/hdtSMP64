@@ -7,6 +7,8 @@
 #include "hdtSkyrimSystem.h"
 #include "hdtSkyrimPhysicsWorld.h"
 
+#include "hdtSkinnedMeshShape.h"
+
 namespace hdt
 {
 	SkinnedMeshWorld::SkinnedMeshWorld()
@@ -189,8 +191,15 @@ namespace hdt
 	{
 		for (int i = 0; i < m_collisionObjects.size(); ++i)
 		{
-			auto body = m_collisionObjects[i];
-			if (body->isKinematicObject())
+			btCollisionObject *body = m_collisionObjects[i];
+			bool shouldIntegrate = body->isKinematicObject();
+			if (body->getUserIndex() == SkinnedMeshBody::CLASS_ID)
+			{
+				// integration status isn't handled by kinematic-ness
+				shouldIntegrate = static_cast<SkinnedMeshBody *>(body)->m_shouldIntegrate;
+			}
+
+			if (shouldIntegrate)
 			{
 				btTransformUtil::integrateTransform(
 					body->getWorldTransform(),

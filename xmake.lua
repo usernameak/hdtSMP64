@@ -16,6 +16,14 @@ if is_mode("debug") then
     add_defines("_DEBUG")
 end
 
+rule("msvc_settings")
+    on_config(function (target)
+        if is_mode("releasedbg") then
+            target:add("cxflags", "cl::/Gy", {force=true})
+            target:add("ldflags", "link::-OPT:REF", "link::-OPT:ICF", {force=true})
+        end
+    end)
+
 option("avx")
     set_default(false)
     set_showmenu(true)
@@ -36,6 +44,12 @@ option("avx512")
     set_description("Enable AVX-512 instructions")
     add_defines("USE_AVX512")
     add_vectorexts("avx512")
+   
+target("commonlibsse")
+    add_rules("msvc_settings")
+
+target("commonlib-shared")
+    add_rules("msvc_settings")
 
 target("bullet3")
     set_arch("x64")
@@ -47,6 +61,8 @@ target("bullet3")
     add_files("lib/bullet3/src/BulletDynamics/**.cpp")
     add_files("lib/bullet3/src/LinearMath/**.cpp")
     add_includedirs("lib/bullet3/src", {public = true})
+
+    add_rules("msvc_settings")
 
     add_defines("BT_THREADSAFE", {public = true})
     add_defines("BT_USE_PPL", {public = true})
@@ -62,6 +78,8 @@ target("hdtSSEUtils")
     add_files("hdtSSEUtils/**.cpp")
     add_headerfiles("hdtSSEUtils/**.h")
     set_pcxxheader("hdtSSEUtils/stdafx.h")
+
+    add_rules("msvc_settings")
 
     add_options("avx", "avx2", "avx512")
 
@@ -82,5 +100,7 @@ target("hdtSMP64")
     set_pcxxheader("hdtSMP64/pch.h")
 
     add_includedirs("hdtSMP64", {public = true})
+
+    add_rules("msvc_settings")
 
     add_options("avx", "avx2", "avx512")

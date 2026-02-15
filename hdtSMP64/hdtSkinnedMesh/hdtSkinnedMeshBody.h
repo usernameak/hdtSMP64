@@ -21,6 +21,7 @@ namespace hdt
 		  , public RefObject
 	{
 	public:
+		constexpr static int CLASS_ID = 0x1000;
 
 		SkinnedMeshBody();
 		virtual ~SkinnedMeshBody();
@@ -73,6 +74,7 @@ namespace hdt
 
 		//		int m_priority;
 		bool m_isKinematic;
+		bool m_shouldIntegrate = false;
 		bool m_useBoundingSphere;
 		Ref<SkinnedMeshShape> m_shape;
 
