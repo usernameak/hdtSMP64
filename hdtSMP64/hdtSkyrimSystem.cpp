@@ -1364,13 +1364,10 @@ namespace hdt
 			constraint->setEquilibriumPoint(i, cinfo.linearEquilibrium[i]);
 			constraint->setEquilibriumPoint(i + 3, cinfo.angularEquilibrium[i]);
 
-#if 0
-			// UPGRADE TODO: non-hookean stuff
 			constraint->setNonHookeanDamping(i, cinfo.linearNonHookeanDamping[i]);
 			constraint->setNonHookeanDamping(i + 3, cinfo.angularNonHookeanDamping[i]);
 			constraint->setNonHookeanStiffness(i, cinfo.linearNonHookeanStiffness[i]);
 			constraint->setNonHookeanStiffness(i + 3, cinfo.angularNonHookeanStiffness[i]);
-#endif
 
 			constraint->enableSpring(i, cinfo.enableLinearSprings);
 			constraint->enableSpring(i + 3, cinfo.enableAngularSprings);
