@@ -134,7 +134,7 @@ bool hdt::papyrus::impl::ReloadPhysicsFileImpl(uint32_t on_actor_formID, uint32_
 						return false;
 					}
 
-					std::unordered_map<IDStr, IDStr> renameMap = armor.renameMap;
+					std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap = armor.renameMap;
 
 					hdt::Ref<SkyrimSystem> system;
 
@@ -236,7 +236,7 @@ bool hdt::papyrus::impl::SwapPhysicsFileImpl(uint32_t on_actor_formID, std::stri
 						return false;
 					}
 
-					std::unordered_map<IDStr, IDStr> renameMap = armor.renameMap;
+					std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap = armor.renameMap;
 
 					hdt::Ref<SkyrimSystem> system;
 

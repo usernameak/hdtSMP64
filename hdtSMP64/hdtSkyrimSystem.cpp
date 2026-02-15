@@ -11,7 +11,7 @@
 
 namespace hdt
 {
-	SkinnedMeshBone* SkyrimSystem::findBone(IDStr name)
+	SkinnedMeshBone* SkyrimSystem::findBone(const RE::BSFixedString& name)
 	{
 		for (auto i : m_bones)
 			if (i->m_name == name)
@@ -19,7 +19,7 @@ namespace hdt
 		return nullptr;
 	}
 
-	SkinnedMeshBody* SkyrimSystem::findBody(IDStr name)
+	SkinnedMeshBody* SkyrimSystem::findBody(const RE::BSFixedString& name)
 	{
 		for (auto i : m_meshes)
 			if (i->m_name == name)
@@ -27,7 +27,7 @@ namespace hdt
 		return nullptr;
 	}
 
-	int SkyrimSystem::findBoneIdx(IDStr name)
+	int SkyrimSystem::findBoneIdx(const RE::BSFixedString& name)
 	{
 		for (int i = 0; i < m_bones.size(); ++i)
 			if (m_bones[i]->m_name == name)
@@ -151,22 +151,22 @@ namespace hdt
 		spdlog::debug("{}({},{}):{}", m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), std::vformat(fmt, std::make_format_args(args...)));
 	}
 
-	RE::NiNode* SkyrimSystemCreator::findObjectByName(const IDStr& name)
+	RE::NiNode* SkyrimSystemCreator::findObjectByName(const RE::BSFixedString& name)
 	{
 		// TODO check it's not a lurker skeleton
-		return findNode(m_skeleton, name->cstr());
+		return findNode(m_skeleton, name);
 	}
 
-	SkyrimBone* SkyrimSystemCreator::getOrCreateBone(const IDStr& name)
+	SkyrimBone* SkyrimSystemCreator::getOrCreateBone(const RE::BSFixedString& name)
 	{
 		auto bone = static_cast<SkyrimBone*>(m_mesh->findBone(getRenamedBone(name)));
 		if (bone) return bone;
 
-		Warning("Bone {} used before being created, trying to create it with current default values", name->cstr());
+		Warning("Bone {} used before being created, trying to create it with current default values", name.c_str());
 		return createBoneFromNodeName(name);
 	}
 
-	IDStr SkyrimSystemCreator::getRenamedBone(IDStr name)
+	const RE::BSFixedString& SkyrimSystemCreator::getRenamedBone(const RE::BSFixedString &name)
 	{
 		auto iter = m_renameMap.find(name);
 		if (iter != m_renameMap.end())
@@ -174,7 +174,7 @@ namespace hdt
 		return name;
 	}
 
-	Ref<SkyrimSystem> SkyrimSystemCreator::createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<IDStr, IDStr> renameMap, SkyrimSystem* old_system)
+	Ref<SkyrimSystem> SkyrimSystemCreator::createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap, SkyrimSystem* old_system)
 	{
 		auto path = file->first;
 		if (path.empty()) return nullptr;
@@ -659,10 +659,10 @@ namespace hdt
 
 	void SkyrimSystemCreator::readOrUpdateBone(SkyrimSystem* old_system)
 	{
-		IDStr name = getRenamedBone(m_reader->getAttribute("name"));
+		RE::BSFixedString name = getRenamedBone(m_reader->getAttribute("name"));
 		if (m_mesh->findBone(name))
 		{
-			Warning("Bone {} already exists, skipped", name->cstr());
+			Warning("Bone {} already exists, skipped", name.c_str());
 			return;
 		}
 
@@ -671,16 +671,16 @@ namespace hdt
 			m_reader->skipCurrentElement();
 	}
 
-	SkyrimBone* SkyrimSystemCreator::createBoneFromNodeName(const IDStr& bodyName, const IDStr& templateName, const bool readTemplate, SkyrimSystem* old_system)
+	SkyrimBone* SkyrimSystemCreator::createBoneFromNodeName(const RE::BSFixedString& bodyName, const IDStr& templateName, const bool readTemplate, SkyrimSystem* old_system)
 	{
 		auto node = findObjectByName(bodyName);
 		if (node)
 		{
-			VMessage("Found node named {}, creating bone", bodyName->cstr());
-			auto boneTemplate = getBoneTemplate(templateName);
+			VMessage("Found node named {}, creating bone", bodyName.c_str());
+			auto boneTemplate = getBoneTemplate(templateName->cstr());
 			if (readTemplate)
 				readBoneTemplate(boneTemplate);
-			auto bone = new SkyrimBone(node->name.c_str(), node, this->m_skeleton, boneTemplate);
+			auto bone = new SkyrimBone(node->name, node, this->m_skeleton, boneTemplate);
 			bone->m_localToRig = boneTemplate.m_centerOfMassTransform;
 			bone->m_rigToLocal = boneTemplate.m_centerOfMassTransform.inverse();
 			bone->m_marginMultipler = boneTemplate.m_marginMultipler;
@@ -712,7 +712,7 @@ namespace hdt
 			m_mesh->m_bones.push_back(bone);
 			return bone;
 		}
-		Warning("Node named {} doesn't exist, skipped, no bone created", bodyName->cstr());
+		Warning("Node named {} doesn't exist, skipped, no bone created", bodyName.c_str());
 		return nullptr;
 	}
 
@@ -778,14 +778,14 @@ namespace hdt
 				auto node = skinInstance->bones[boneIdx];
 				auto boneData = &skinData->boneData[boneIdx];
 				auto boundingSphere = BoundingSphere(convertNi(boneData->bound.center), boneData->bound.radius);
-				IDStr boneName = node->name.c_str();
+				const RE::BSFixedString &boneName = node->name;
 				auto bone = m_mesh->findBone(boneName);
 				if (!bone)
 				{
 					auto defaultBoneInfo = getBoneTemplate("");
 					bone = new SkyrimBone(boneName, node->AsNode(), this->m_skeleton, defaultBoneInfo);
 					m_mesh->m_bones.push_back(bone);
-					VMessage("Created bone {} added to body {}, created without default values", boneName->cstr(), name);
+					VMessage("Created bone {} added to body {}, created without default values", boneName.c_str(), name);
 				}
 
 				body->addBone(bone, convertNi(boneData->skinToBone), boundingSphere);
@@ -1208,7 +1208,7 @@ namespace hdt
 		}
 	}
 
-	bool SkyrimSystemCreator::findBones(const IDStr& bodyAName, const IDStr& bodyBName, SkyrimBone*& bodyA,
+	bool SkyrimSystemCreator::findBones(const RE::BSFixedString& bodyAName, const RE::BSFixedString& bodyBName, SkyrimBone*& bodyA,
 	                                 SkyrimBone*& bodyB)
 	{
 		bodyA = static_cast<SkyrimBone*>(m_mesh->findBone(bodyAName));
@@ -1216,7 +1216,7 @@ namespace hdt
 
 		if (!bodyA)
 		{
-			Warning("constraint {} <-> {} : bone for bodyA doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint {} <-> {} : bone for bodyA doesn't exist, will try to create it", bodyAName.c_str(), bodyBName.c_str());
 			bodyA = createBoneFromNodeName(bodyAName);
 			if (!bodyA)
 			{
@@ -1226,7 +1226,7 @@ namespace hdt
 		}
 		if (!bodyB)
 		{
-			Warning("constraint {} <-> {} : bone for bodyB doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint {} <-> {} : bone for bodyB doesn't exist, will try to create it", bodyAName.c_str(), bodyBName.c_str());
 			bodyB = createBoneFromNodeName(bodyBName);
 			if (!bodyB)
 			{
@@ -1236,19 +1236,19 @@ namespace hdt
 		}
 		if (bodyA == bodyB)
 		{
-			Warning("constraint between same object {} <-> {}, skipped", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint between same object {} <-> {}, skipped", bodyAName.c_str(), bodyBName.c_str());
 			m_reader->skipCurrentElement();
 			return false;
 		}
 
 		if (bodyA->m_rig.isKinematicObject() && bodyB->m_rig.isKinematicObject())
 		{
-			Warning("constraint between two kinematic object {} <-> {}, skipped", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint between two kinematic object {} <-> {}, skipped", bodyAName.c_str(), bodyBName.c_str());
 			m_reader->skipCurrentElement();
 			return false;
 		}
 
-		VMessage("OK: constraint between object {} <-> {}", bodyAName->cstr(), bodyBName->cstr());
+		VMessage("OK: constraint between object {} <-> {}", bodyAName.c_str(), bodyBName.c_str());
 		return true;
 	}
 

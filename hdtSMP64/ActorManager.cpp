@@ -403,11 +403,11 @@ namespace hdt
 				for (auto& entry : skeleton.head.renameMap)
 				{
 					// This case never happens to a lurker skeleton, thus we don't need to test.
-					auto node = findNode(headPartIter->origPartRootNode, entry.second->cstr());
+					auto node = findNode(headPartIter->origPartRootNode, entry.second);
 					if (node)
 					{
-						spdlog::trace("Rename node {} -> {}.", entry.second->cstr(), entry.first->cstr());
-						node->name = entry.first->cstr();
+						spdlog::trace("Rename node {} -> {}.", entry.second.c_str(), entry.first.c_str());
+						node->name = entry.first;
 					}
 				}
 			}
@@ -557,7 +557,7 @@ namespace hdt
 	}
 
 	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix,
-		std::unordered_map<IDStr, IDStr>& map)
+		std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		for (auto &srcChildAV : src->children) {
 			auto *srcChild = srcChildAV->AsNode();
@@ -591,7 +591,7 @@ namespace hdt
 	}
 
 	// TODO: move to smart pointers to not leak memory
-	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		RE::NiCloningProcess c{};
 		c.copyType = 1; // COPY_EXACT
@@ -606,11 +606,11 @@ namespace hdt
 		return ret;
 	}
 
-	void ActorManager::Skeleton::renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	void ActorManager::Skeleton::renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		std::string newName(prefix->cstr(), prefix->size());
 		newName += root->name;
-		if (map.insert(std::make_pair<IDStr, IDStr>(root->name.c_str(), newName)).second)
+		if (map.emplace(root->name, RE::BSFixedString(newName)).second)
 			spdlog::trace("Rename Bone {} -> {}.", root->name.c_str(), newName.c_str());
 		root->name = newName;
 
@@ -683,7 +683,7 @@ namespace hdt
 
 		if (!isFirstPersonSkeleton(skeleton))
 		{
-			std::unordered_map<IDStr, IDStr> renameMap = armor.renameMap;
+			std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap = armor.renameMap;
 			// FIXME we probably could simplify this by using findNode as surely we don't attach Armors to lurkers skeleton?
 			auto system = SkyrimSystemCreator().createOrUpdateSystem(getNpcNode(skeleton), attachedNode, &armor.physicsFile, std::move(renameMap), nullptr);
 
@@ -744,7 +744,7 @@ namespace hdt
 							if (findNode->second <= 0)
 							{
 								spdlog::trace("Node no longer in use, cleaning from skeleton.");
-								auto removeObj = findObject(npc, renameIt->second->cstr());
+								auto removeObj = findObject(npc, renameIt->second);
 								if (removeObj)
 								{
 									spdlog::trace("Found node {}, removing.", removeObj->name.c_str());
@@ -947,7 +947,7 @@ namespace hdt
 
 			if (!isFirstPersonSkeleton(skeleton))
 			{
-				std::unordered_map<IDStr, IDStr> renameMap = i.renameMap;
+				std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap = i.renameMap;
 				auto system = SkyrimSystemCreator().createOrUpdateSystem(npc, i.armorWorn, &i.physicsFile, std::move(renameMap), nullptr);
 
 				if (system)
@@ -1003,7 +1003,7 @@ namespace hdt
 				continue;
 			}
 
-			std::unordered_map<IDStr, IDStr> renameMap = this->head.renameMap;
+			std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap = this->head.renameMap;
 
 			spdlog::trace("Try create system for headpart {} physics file {}.", headPart.headPart->name.c_str(),
 				headPart.physicsFile.first);
@@ -1189,8 +1189,8 @@ namespace hdt
 
 			if (renameIt != this->head.renameMap.end())
 			{
-				spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), renameIt->second->cstr());
-				boneName = renameIt->second->cstr();
+				spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), renameIt->second.c_str());
+				boneName = renameIt->second.c_str();
 				hasRenames = true;
 			}
 
@@ -1232,8 +1232,8 @@ namespace hdt
 
 				if (postMergeRenameIt != this->head.renameMap.end())
 				{
-					spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), postMergeRenameIt->second->cstr());
-					boneName = postMergeRenameIt->second->cstr();
+					spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), postMergeRenameIt->second.c_str());
+					boneName = postMergeRenameIt->second.c_str();
 					hasRenames = true;
 				}
 
@@ -1256,8 +1256,8 @@ namespace hdt
 		{
 			for (auto& entry : head.renameMap)
 			{
-				if ((this->head.headParts.back().origPartRootNode && findObject(this->head.headParts.back().origPartRootNode, entry.first->cstr())) ||
-					(this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode.get(), entry.first->cstr())))
+				if ((this->head.headParts.back().origPartRootNode && findObject(this->head.headParts.back().origPartRootNode, entry.first.c_str())) ||
+					(this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode.get(), entry.first.c_str())))
 				{
 					auto findNode = this->head.nodeUseCount.find(entry.first);
 					if (findNode != this->head.nodeUseCount.end())

@@ -207,7 +207,7 @@ namespace hdt
 					if (armor.state() != ActorManager::ItemState::e_NoPhysics)
 					{
 						for (auto mesh : armor.meshes())
-							RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name->cstr());
+							RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name.c_str());
 					}
 				}
 
@@ -226,7 +226,7 @@ namespace hdt
 						if (headPart.state() != ActorManager::ItemState::e_NoPhysics)
 						{
 							for (auto mesh : headPart.meshes())
-								RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name->cstr());
+								RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name.c_str());
 						}
 					}
 				}

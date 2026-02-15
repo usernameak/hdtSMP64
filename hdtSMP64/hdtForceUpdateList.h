@@ -7,20 +7,19 @@
 
 namespace hdt {
 	class ForceUpdateList {
-
-		typedef struct {
-			std::unordered_set<std::string> nodes;
-			std::unordered_set<std::string> nodes_mov;
-		}nodeList_t;
+		 struct NodeList {
+			std::unordered_set<RE::BSFixedString> nodes;
+			std::unordered_set<RE::BSFixedString> nodes_mov;
+		};
 
 	public:
 		static ForceUpdateList* GetSingleton();
-		int isAmong(std::string node_name);
-		int isAmong(hdt::IDStr node_name);
+
+		int isAmong(const RE::BSFixedString &node_name);
 
 	private:
 		ForceUpdateList();
 
-		nodeList_t m_list;
+		NodeList m_list;
 	};
 }

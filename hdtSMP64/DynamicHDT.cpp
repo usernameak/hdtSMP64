@@ -19,17 +19,16 @@ std::string hdt::util::UInt32toString(uint32_t formID)
 	return std::string(buffer);
 }
 
-std::string _deprefix(std::string str_with_prefix) {
-	std::string str_no_prefix = str_with_prefix;
-	if (str_with_prefix.find("hdtSSEPhysics_AutoRename_") == 0) {
-		str_no_prefix = str_with_prefix.substr(str_with_prefix.find(' ') + 1);
+RE::BSFixedString _deprefix(const RE::BSFixedString& str_with_prefix) {
+	std::string str_no_prefix = std::string(str_with_prefix.data(), str_with_prefix.size());
+	if (str_no_prefix.find("hdtSSEPhysics_AutoRename_") == 0) {
+		str_no_prefix = str_no_prefix.substr(str_no_prefix.find(' ') + 1);
 	}
 	return str_no_prefix;
 }
 
-bool _match_name(hdt::IDStr& a, hdt::IDStr& b) {
-	if (!a || !b)return false;
-	return _deprefix(a->cstr()) == _deprefix(b->cstr());
+bool _match_name(const RE::BSFixedString& a, const RE::BSFixedString& b) {
+	return _deprefix(a) == _deprefix(b);
 }
 
 void hdt::util::transferCurrentPosesBetweenSystems(hdt::SkyrimSystem* src, hdt::SkyrimSystem* dst)
