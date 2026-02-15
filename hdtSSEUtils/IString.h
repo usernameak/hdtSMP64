@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../hdtSSEUtils/Ref.h"
+#include <type_traits>
 
 namespace hdt
 {
@@ -16,9 +17,13 @@ namespace hdt
 		virtual size_t size() const = 0;
 	};
 
-	namespace ref
+	template <typename T>
+	struct RefImpl;
+
+	template <std::derived_from<IString> T>
+	struct RefImpl<T>
 	{
-		inline void retain(IString* str) { str->retain(); }
-		inline void release(IString* str) { str->release(); }
-	}
+		inline static void retain(IString* str) { str->retain(); }
+		inline static void release(IString* str) { str->release(); }
+	};
 }

@@ -10,7 +10,6 @@
 #include "hdtSkyrimPhysicsWorld.h"
 #include "Hooks.h"
 #include "HookEvents.h"
-#include "skse64/PluginAPI.h"
 #include "dhdtOverrideManager.h"
 #include "dhdtPapyrusFunctions.h"
 
@@ -20,9 +19,9 @@ constexpr auto OVERRIDE_SAVE_PATH = "Data/SKSE/Plugins/hdtOverrideSaves/";
 
 namespace hdt {
 	namespace util {
-		UInt32 splitArmorAddonFormID(std::string nodeName);
+		uint32_t splitArmorAddonFormID(const RE::BSFixedString &nodeName);
 
-		std::string UInt32toString(UInt32 formID);
+		std::string UInt32toString(uint32_t formID);
 
 		void transferCurrentPosesBetweenSystems(hdt::SkyrimSystem* src, hdt::SkyrimSystem* dst);
 	}

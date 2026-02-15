@@ -1,47 +1,46 @@
 #include "stdafx.h"
 #include "NetImmerseUtils.h"
-#include <skse64/GameStreams.h>
 #include <fstream>
 
 namespace hdt
 {
-	NiNode* addParentToNode(NiNode * node, const char * name)
+	RE::NiNode* addParentToNode(RE::NiNode * node, const char * name)
 	{
-		auto parent = node->m_parent;
-		auto newParent = NiNode::Create(1);
-		node->IncRef();
+		auto parent = node->parent;
+		auto newParent = RE::NiNode::Create(1);
+		node->IncRefCount();
 		if (parent)
 		{
-			parent->RemoveChild(node);
+			parent->DetachChild(node);
 			parent->AttachChild(newParent, false);
 		}
 		newParent->AttachChild(node, false);
-		setNiNodeName(newParent, name);
-		node->DecRef();
+		newParent->name = name;
+		node->DecRefCount();
 		return newParent;
 	}
 
-	NiAVObject * findObject(NiAVObject * obj, const BSFixedString & name)
+	RE::NiAVObject * findObject(RE::NiAVObject * obj, const RE::BSFixedString & name)
 	{
-		return obj->GetObjectByName((const char**)&name);
+		return obj->GetObjectByName(name);
 	}
 
-	NiNode * findNode(NiNode * obj, const BSFixedString & name)
+	RE::NiNode * findNode(RE::NiNode * obj, const RE::BSFixedString & name)
 	{
-		auto ret = obj->GetObjectByName((const char**)&name);
-		return ret ? ret->GetAsNiNode() : nullptr;
+		auto ret = obj->GetObjectByName(name);
+		return ret ? ret->AsNode() : nullptr;
 	}
 
 	std::string readAllFile(const char* path)
 	{
-		BSResourceNiBinaryStream fin(path);
-		if (!fin.IsValid()) return "";
+		RE::BSResourceNiBinaryStream fin(path);
+		if (!fin.good()) return "";
 
 		size_t readed;
 		char buffer[4096];
 		std::string ret;
 		do {
-			readed = fin.Read(buffer, sizeof(buffer));
+			readed = fin.read(buffer, sizeof(buffer));
 			ret.append(buffer, readed);
 		} while (readed == sizeof(buffer));
 		return ret;
@@ -61,13 +60,13 @@ namespace hdt
 		return ret;
 	}
 
-	void updateTransformUpDown(NiAVObject * obj, bool dirty)
+	void updateTransformUpDown(RE::NiAVObject * obj, bool dirty)
 	{
 		if (!obj) return;
 
-		NiAVObject::ControllerUpdateContext ctx =
+		RE::NiUpdateData ctx =
 		{ 0.f,
-			dirty ? NiAVObject::ControllerUpdateContext::kDirty : NiAVObject::ControllerUpdateContext::kNone
+			dirty ? RE::NiUpdateData::Flag::kDirty : RE::NiUpdateData::Flag::kNone
 		};
 		
 		obj->UpdateWorldData(&ctx);
@@ -76,10 +75,9 @@ namespace hdt
 
 		if (node)
 		{
-			for (int i = 0; i < node->m_children.m_arrayBufLen; ++i)
+			for (auto &child : node->children)
 			{
-				auto child = node->m_children.m_data[i];
-				if (child) updateTransformUpDown(child, dirty);
+				if (child) updateTransformUpDown(child.get(), dirty);
 			}
 		}
 	}

@@ -1,163 +1,167 @@
-#include <detours.h>
-
-#include "skse64/GameData.h"
-#include "skse64/GameForms.h"
-#include "skse64/GameReferences.h"
-#include "skse64/NiObjects.h"
-#include "skse64/NiGeometry.h"
-#include "skse64/NiExtraData.h"
+#include "pch.h"
 
 #include "Hooks.h"
 #include "HookEvents.h"
 #include "Offsets.h"
-#include "skse64/NiNodes.h"
-#include "skse64/GameRTTI.h"
-#include "skse64_common/SafeWrite.h"
 #include <xbyak/xbyak.h>
-#include "skse64_common/BranchTrampoline.h"
 #include "ActorManager.h"
+
+#include <windows.h>
+#include <detours.h>
 
 namespace hdt
 {
-	class BSFaceGenNiNodeEx : BSFaceGenNiNode
+	// BEGIN: class BSFaceGenNiNode
+
+	typedef void(*PFNBSFaceGenNiNode_SkinAllGeometry)(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, char a_unk);
+	typedef void(*PFNBSFaceGenNiNode_SkinSingleGeometry)(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, RE::BSTriShape* a_trishape);
+
+	static REL::Relocation<PFNBSFaceGenNiNode_SkinAllGeometry> BSFaceGenNiNode_SkinAllGeometry{ REL::ID{26986} };
+	static REL::Relocation<PFNBSFaceGenNiNode_SkinSingleGeometry> BSFaceGenNiNode_SkinSingleGeometry{ REL::ID{26987} };
+
+	static PFNBSFaceGenNiNode_SkinAllGeometry BSFaceGenNiNode_SkinAllGeometry_Trampoline;
+	static PFNBSFaceGenNiNode_SkinSingleGeometry BSFaceGenNiNode_SkinSingleGeometry_Trampoline;
+
+	static void BSFaceGenNiNode_SkinSingleGeometry_Hook(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, RE::BSTriShape* a_trishape);
+
+	static void BSFaceGenNiNode_ProcessHeadPart(RE::BSFaceGenNiNode* self, RE::BGSHeadPart* headPart, RE::NiNode* a_skeleton)
 	{
-		MEMBER_FN_PREFIX(BSFaceGenNiNodeEx);
-
-	public:
-		DEFINE_MEMBER_FN_HOOK(SkinAllGeometry, void, offset::BSFaceGenNiNode_SkinAllGeometry, NiNode* a_skeleton, BSGeometry* a_geometry, char a_unk);
-		DEFINE_MEMBER_FN_HOOK(SkinSingleGeometry, void, offset::BSFaceGenNiNode_SkinSingleGeometry, NiNode* a_skeleton, BSGeometry* a_geometry, BSTriShape* a_trishape);
-
-		void ProcessHeadPart(BGSHeadPart* headPart, NiNode* a_skeleton)
+		if (headPart)
 		{
-			if (headPart)
+			RE::NiAVObject* headNode = self->GetObjectByName(headPart->formEditorID);
+			if (headNode)
 			{
-				NiAVObject* headNode = this->GetObjectByName(&headPart->partName.data);
-				if (headNode)
-				{
-					BSGeometry* headGeo = headNode->GetAsBSGeometry();
-					if (headGeo)
-						SkinSingleGeometry(a_skeleton, headGeo, nullptr);
-				}
-				BGSHeadPart* extraPart = NULL;
-				for (UInt32 p = 0; p < headPart->extraParts.count; p++)
-				{
-					if (headPart->extraParts.GetNthItem(p, extraPart))
-						ProcessHeadPart(extraPart, a_skeleton);
-				}
+				RE::BSGeometry* headGeo = headNode->AsGeometry();
+				if (headGeo)
+					BSFaceGenNiNode_SkinSingleGeometry_Hook(self, a_skeleton, headGeo, nullptr);
+			}
+			for (uint32_t p = 0; p < headPart->extraParts.size(); p++)
+			{
+				RE::BGSHeadPart* extraPart = headPart->extraParts[p];
+				if (extraPart)
+					BSFaceGenNiNode_ProcessHeadPart(self, extraPart, a_skeleton);
 			}
 		}
+	}
 
-		void SkinAllGeometryCalls(NiNode* a_skeleton, BSGeometry* a_geometry, char a_unk)
+	static void BSFaceGenNiNode_SkinAllGeometryCalls(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, char a_unk)
+	{
+		bool needRegularCall = true;
+		if (ActorManager::instance()->skeletonNeedsParts(a_skeleton))
 		{
-			bool needRegularCall = true;
-			if (ActorManager::instance()->skeletonNeedsParts(a_skeleton))
+			RE::Actor* actor = a_skeleton->userData->As<RE::Actor>();
+			if (actor)
 			{
-				TESForm* form = LookupFormByID(a_skeleton->m_owner->formID);
-				Actor* actor = DYNAMIC_CAST(form, TESForm, Actor);
-				if (actor)
+				RE::TESNPC* actorBase = actor->GetBaseObject()->As<RE::TESNPC>();
+				uint32_t numHeadParts = 0;
+				RE::BGSHeadPart** Headparts = nullptr;
+				if (actorBase->HasOverlays()) {
+					numHeadParts = actorBase->GetNumBaseOverlays();
+					Headparts = actorBase->GetBaseOverlays();
+				}
+				else {
+					numHeadParts = actorBase->numHeadParts;
+					Headparts = actorBase->headParts;
+				}
+				if (Headparts)
 				{
-					TESNPC* actorBase = DYNAMIC_CAST(actor->baseForm, TESForm, TESNPC);
-					UInt32 numHeadParts = 0;
-					BGSHeadPart** Headparts = nullptr;
-					if (CALL_MEMBER_FN(actorBase, HasOverlays)()) {
-						numHeadParts = GetNumActorBaseOverlays(actorBase);
-						Headparts = GetActorBaseOverlays(actorBase);
-					}
-					else {
-						numHeadParts = actorBase->numHeadParts;
-						Headparts = actorBase->headparts;
-					}
-					if (Headparts)
-					{
-						for (UInt32 i = 0; i < numHeadParts; i++) {
-							if (Headparts[i]) {
-								ProcessHeadPart(Headparts[i], a_skeleton);
-							}
+					for (uint32_t i = 0; i < numHeadParts; i++) {
+						if (Headparts[i]) {
+							BSFaceGenNiNode_ProcessHeadPart(self, Headparts[i], a_skeleton);
 						}
 					}
-					if (a_skeleton->m_owner && a_skeleton->m_owner->formID == 0x14)
-						needRegularCall = false;
 				}
+				if (a_skeleton->userData && a_skeleton->userData->formID == 0x14)
+					needRegularCall = false;
 			}
-			if (needRegularCall)
-				CALL_MEMBER_FN(this, SkinAllGeometry)(a_skeleton, a_geometry, a_unk);
 		}
 
-		void SkinSingleGeometry(NiNode* a_skeleton, BSGeometry* a_geometry, BSTriShape* a_trishape)
+		if (needRegularCall)
+			BSFaceGenNiNode_SkinAllGeometry_Trampoline(self, a_skeleton, a_geometry, a_unk);
+	}
+
+	static void BSFaceGenNiNode_SkinSingleGeometry_Hook(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, RE::BSTriShape* a_trishape)
+	{
+		const char* name = "";
+
+		RE::FormID formId = 0x0;
+		if (a_skeleton->userData && a_skeleton->userData->GetBaseObject())
 		{
-			const char* name = "";
-			uint32_t formId = 0x0;
+			auto *bname = a_skeleton->userData->GetBaseObject()->As<RE::TESFullName>();
+			if (bname)
+				name = bname->GetFullName();
 
-			if (a_skeleton->m_owner && a_skeleton->m_owner->baseForm)
-			{
-				auto bname = DYNAMIC_CAST(a_skeleton->m_owner->baseForm, TESForm, TESFullName);
-				if (bname)
-					name = bname->GetName();
-				auto bnpc = DYNAMIC_CAST(a_skeleton->m_owner->baseForm, TESForm, TESNPC);
-				if (bnpc && bnpc->nextTemplate)
-					formId = bnpc->nextTemplate->formID;
-			}
-			_MESSAGE("SkinSingleGeometry %s %d - %s, %s, (formid %08x base form %08x head template form %08x)",
-				a_skeleton->m_name, a_skeleton->m_children.m_size, a_geometry->m_name, name,
-				a_skeleton->m_owner ? a_skeleton->m_owner->formID : 0x0,
-				a_skeleton->m_owner ? a_skeleton->m_owner->baseForm->formID : 0x0, formId);
-
-			SkinSingleHeadGeometryEvent e;
-			e.skeleton = a_skeleton;
-			e.geometry = a_geometry;
-			e.headNode = this;
-			g_skinSingleHeadGeometryEventDispatcher.dispatch(e);
+			auto *bnpc = a_skeleton->userData->GetBaseObject()->As<RE::TESNPC>();
+			if (bnpc && bnpc->faceNPC)
+				formId = bnpc->faceNPC->formID;
 		}
+		spdlog::info("SkinSingleGeometry {} {} - {}, (formid {:08x} base form {:08x} head template form {:08x})",
+			a_skeleton->name.c_str(), a_skeleton->children.size(), name,
+			a_skeleton->userData ? a_skeleton->userData->formID : 0x0,
+			a_skeleton->userData ? a_skeleton->userData->GetBaseObject()->formID : 0x0,
+			formId);
 
-		void SkinAllGeometry(NiNode* a_skeleton, BSGeometry* a_geometry, char a_unk)
+		SkinSingleHeadGeometryEvent e;
+		e.skeleton = a_skeleton;
+		e.geometry = a_geometry;
+		e.headNode = self;
+		g_skinSingleHeadGeometryEventDispatcher.dispatch(e);
+	}
+
+	static void BSFaceGenNiNode_SkinAllGeometry_Hook(RE::BSFaceGenNiNode* self, RE::NiNode* a_skeleton, RE::BSGeometry* a_geometry, char a_unk)
+	{
+		const char* name = "";
+		uint32_t formId = 0x0;
+		if (a_skeleton->userData && a_skeleton->userData->GetBaseObject())
 		{
-			const char* name = "";
-			uint32_t formId = 0x0;
-			if (a_skeleton->m_owner && a_skeleton->m_owner->baseForm)
-			{
-				auto bname = DYNAMIC_CAST(a_skeleton->m_owner->baseForm, TESForm, TESFullName);
-				if (bname)
-					name = bname->GetName();
-				auto bnpc = DYNAMIC_CAST(a_skeleton->m_owner->baseForm, TESForm, TESNPC);
-				if (bnpc && bnpc->nextTemplate)
-					formId = bnpc->nextTemplate->formID;
-			}
-			_MESSAGE("SkinAllGeometry %s %d, %s, (formid %08x base form %08x head template form %08x)",
-				a_skeleton->m_name, a_skeleton->m_children.m_size, name,
-				a_skeleton->m_owner ? a_skeleton->m_owner->formID : 0x0,
-				a_skeleton->m_owner ? a_skeleton->m_owner->baseForm->formID : 0x0, formId);
+			auto bname = a_skeleton->userData->GetBaseObject()->As<RE::TESFullName>();
+			if (bname)
+				name = bname->GetFullName();
+			auto bnpc = a_skeleton->userData->GetBaseObject()->As<RE::TESNPC>();
+			if (bnpc && bnpc->faceNPC)
+				formId = bnpc->faceNPC->formID;
+		}
+		spdlog::info("SkinAllGeometry {} {} - {}, (formid {:08x} base form {:08x} head template form {:08x})",
+			a_skeleton->name.c_str(), static_cast<uint32_t>(a_skeleton->children.size()), name,
+			a_skeleton->userData ? a_skeleton->userData->formID : 0x0,
+			a_skeleton->userData ? a_skeleton->userData->GetBaseObject()->formID : 0x0, formId);
 
-			SkinAllHeadGeometryEvent e;
-			e.skeleton = a_skeleton;
-			e.headNode = this;
-			g_skinAllHeadGeometryEventDispatcher.dispatch(e);
+		SkinAllHeadGeometryEvent e;
+		e.skeleton = a_skeleton;
+		e.headNode = self;
+		g_skinAllHeadGeometryEventDispatcher.dispatch(e);
 
 #ifdef ANNIVERSARY_EDITION
-			SkinAllGeometryCalls(a_skeleton, a_geometry, a_unk);
+		BSFaceGenNiNode_SkinAllGeometryCalls(self, a_skeleton, a_geometry, a_unk);
 #else
-			CALL_MEMBER_FN(this, SkinAllGeometry)(a_skeleton, a_geometry, a_unk);
+		BSFaceGenNiNode_SkinAllGeometry_Trampoline(self, a_skeleton, a_geometry, a_unk);
 #endif
 
-			e.hasSkinned = true;
-			g_skinAllHeadGeometryEventDispatcher.dispatch(e);
-		}
-	};
+		e.hasSkinned = true;
+		g_skinAllHeadGeometryEventDispatcher.dispatch(e);
+	}
 
-	RelocAddr<uintptr_t> BoneLimit(offset::BSFaceGenModelExtraData_BoneLimit);
-
-	void hookFaceGen()
+	void BSFaceGenNiNode_SetHooks()
 	{
-		DetourAttach((void**)BSFaceGenNiNodeEx::_SkinSingleGeometry_GetPtrAddr(),
-			(void*)GetFnAddr(&BSFaceGenNiNodeEx::SkinSingleGeometry));
-		DetourAttach((void**)BSFaceGenNiNodeEx::_SkinAllGeometry_GetPtrAddr(),
-			(void*)GetFnAddr(&BSFaceGenNiNodeEx::SkinAllGeometry));
+		BSFaceGenNiNode_SkinSingleGeometry_Trampoline = BSFaceGenNiNode_SkinSingleGeometry.get();
+		DetourAttach((void**)&BSFaceGenNiNode_SkinSingleGeometry_Trampoline, &BSFaceGenNiNode_SkinSingleGeometry_Hook);
 
-		RelocAddr<uintptr_t> addr(offset::BSFaceGenNiNode_SkinSingleGeometry_bug);
-		SafeWrite8(addr.GetUIntPtr(), 0x7);
+		BSFaceGenNiNode_SkinAllGeometry_Trampoline = BSFaceGenNiNode_SkinAllGeometry.get();
+		DetourAttach((void**)&BSFaceGenNiNode_SkinAllGeometry_Trampoline, &BSFaceGenNiNode_SkinAllGeometry_Hook);
+
+		// .text:00000001403D88D4                 cmp     ebx, 8
+		// patch 8 -> 7
+		// The same for AE/SE/VR.
+		static REL::Relocation<uintptr_t> writeSingleGeometryBug(REL::ID{ 26987 }, 0x96);
+		writeSingleGeometryBug.write(0x7);
+
+		// bone limit workaround
+
+		static REL::Relocation<uintptr_t> boneLimit(REL::ID{ 24836 }, 0x75);
 
 		struct BSFaceGenExtraModelData_BoneCount_Code : Xbyak::CodeGenerator
 		{
-			BSFaceGenExtraModelData_BoneCount_Code(void* buf) : CodeGenerator(4096, buf)
+			BSFaceGenExtraModelData_BoneCount_Code() : CodeGenerator(64)
 			{
 				Xbyak::Label j_Out;
 
@@ -175,190 +179,214 @@ namespace hdt
 
 				L(j_Out);
 				jmp(ptr[rip]);
-				dq(BoneLimit.GetUIntPtr() + 0x7);
+				dq(boneLimit.get() + 0x7);
 			}
 		};
 
-		void* codeBuf = g_localTrampoline.StartAlloc();
-		BSFaceGenExtraModelData_BoneCount_Code code(codeBuf);
-		g_localTrampoline.EndAlloc(code.getCurr());
 
-		g_branchTrampoline.Write5Branch(BoneLimit.GetUIntPtr(), uintptr_t(code.getCode()));
+		BSFaceGenExtraModelData_BoneCount_Code code;
+		REL::GetTrampoline().write_jmp5(boneLimit.get(), uintptr_t(REL::GetTrampoline().allocate(code)));
 
 	}
 
-	void unhookFaceGen()
+	void BSFaceGenNiNode_RemoveHooks()
 	{
-		DetourDetach((void**)BSFaceGenNiNodeEx::_SkinSingleGeometry_GetPtrAddr(),
-		             (void*)GetFnAddr(&BSFaceGenNiNodeEx::SkinSingleGeometry));
-		DetourDetach((void**)BSFaceGenNiNodeEx::_SkinAllGeometry_GetPtrAddr(),
-		             (void*)GetFnAddr(&BSFaceGenNiNodeEx::SkinAllGeometry));
+		DetourDetach((void**)&BSFaceGenNiNode_SkinAllGeometry_Trampoline, &BSFaceGenNiNode_SkinAllGeometry_Hook);
+		DetourDetach((void**)&BSFaceGenNiNode_SkinSingleGeometry_Trampoline, &BSFaceGenNiNode_SkinSingleGeometry_Hook);
 	}
 
-	struct Unk001CB0E0
+	// END  : class BSFaceGenNiNode
+	
+	// --------------------------
+	 
+	// BEGIN: class BipedAnim
+
+	typedef RE::NiAVObject *(*PFNBipedAnim_AttachArmor)(
+		RE::BipedAnim* self,
+		RE::NiNode* armor,
+		RE::NiNode* skeleton,
+		void* unk3,
+		char unk4,
+		char unk5,
+		void* unk6
+	);
+
+	static REL::Relocation<PFNBipedAnim_AttachArmor> BipedAnim_AttachArmor{ RELOCATION_ID(15535, 15712) };
+
+	PFNBipedAnim_AttachArmor BipedAnim_AttachArmor_Trampoline;
+
+	static RE::NiAVObject* BipedAnim_AttachArmor_Hook(
+		RE::BipedAnim *self,
+		RE::NiNode* armor, 
+		RE::NiNode* skeleton,
+		void* unk3, 
+		char unk4, 
+		char unk5, 
+		void* unk6)
 	{
-		MEMBER_FN_PREFIX(Unk001CB0E0);
+		ArmorAttachEvent event;
+		event.armorModel = armor;
+		event.skeleton = skeleton;
+		g_armorAttachEventDispatcher.dispatch(event);
 
-		DEFINE_MEMBER_FN_HOOK(unk001CB0E0, NiAVObject*, offset::ArmorAttachFunction, NiNode* armor, NiNode* skeleton,
-		                      void* unk3, char unk4, char unk5, void* unk6);
+		auto ret = BipedAnim_AttachArmor_Trampoline(self, armor, skeleton, unk3, unk4, unk5, unk6);
 
-		NiAVObject* unk001CB0E0(NiNode* armor, NiNode* skeleton, void* unk3, char unk4, char unk5, void* unk6)
-		{
-			ArmorAttachEvent event;
-			event.armorModel = armor;
-			event.skeleton = skeleton;
-			g_armorAttachEventDispatcher.dispatch(event);
-
-			auto ret = CALL_MEMBER_FN(this, unk001CB0E0)(armor, skeleton, unk3, unk4, unk5, unk6);
-
-			if (ret) {
+		if (ret) {
 			event.attachedNode = ret;
 			event.hasAttached = true;
 			g_armorAttachEventDispatcher.dispatch(event);
-			}
-			return ret;
 		}
-	};
 
-	struct UnequipItem
-	{
-		MEMBER_FN_PREFIX(UnequipItem);
-
-		DEFINE_MEMBER_FN_HOOK(unequipItem, bool, offset::ItemUnequipFunction, Actor* actor, TESForm* item, BaseExtraList* extraData, SInt32 count, BGSEquipSlot* equipSlot, bool unkFlag1, bool preventEquip, bool unkFlag2, bool unkFlag3, void* unk);
-
-		bool unequipItem(Actor* actor, TESForm* item, BaseExtraList* extraData, SInt32 count, BGSEquipSlot* equipSlot, bool unkFlag1, bool preventEquip, bool unkFlag2, bool unkFlag3, void* unk)
-		{
-			ArmorDetachEvent event;
-			event.actor = actor;
-			g_armorDetachEventDispatcher.dispatch(event);
-
-			auto ret = CALL_MEMBER_FN(this, unequipItem)(actor, item, extraData, count, equipSlot, unkFlag1, preventEquip, unkFlag2, unkFlag3, unk);
-
-			event.hasDetached = true;
-			g_armorDetachEventDispatcher.dispatch(event);
-			return ret;
-		}
-	};
-
-	void hookAttachArmor()
-	{
-		DetourAttach((void**)Unk001CB0E0::_unk001CB0E0_GetPtrAddr(), (void*)GetFnAddr(&Unk001CB0E0::unk001CB0E0));
+		return ret;
 	}
 
-	void unhookAttachArmor()
+	void BipedAnim_SetHooks()
 	{
-		DetourDetach((void**)Unk001CB0E0::_unk001CB0E0_GetPtrAddr(), (void*)GetFnAddr(&Unk001CB0E0::unk001CB0E0));
+		BipedAnim_AttachArmor_Trampoline = BipedAnim_AttachArmor.get();
+		DetourAttach((void**)&BipedAnim_AttachArmor_Trampoline, &BipedAnim_AttachArmor_Hook);
 	}
 
-	void hookDetachArmor()
+	void BipedAnim_RemoveHooks()
 	{
-		DetourAttach((void**)UnequipItem::_unequipItem_GetPtrAddr(), (void*)GetFnAddr(&UnequipItem::unequipItem));
+		DetourDetach((void **)&BipedAnim_AttachArmor_Trampoline, &BipedAnim_AttachArmor_Hook);
 	}
 
-	void unhookDetachArmor()
+
+	// END  : class BipedAnim
+
+	// --------------------------
+
+	// BEGIN: class ActorEquipManager
+
+	typedef bool(*PFNActorEquipManager_UnequipObject)(
+		RE::ActorEquipManager* self,
+		RE::Actor* a_actor,
+		RE::TESBoundObject* a_object,
+		RE::ExtraDataList* a_extraData,
+		std::uint32_t a_count,
+		const RE::BGSEquipSlot* a_slot,
+		bool a_queueEquip,
+		bool a_forceEquip,
+		bool a_playSounds,
+		bool a_applyNow,
+		const RE::BGSEquipSlot* a_slotToReplace
+	);
+
+	static REL::Relocation<PFNActorEquipManager_UnequipObject> ActorEquipManager_UnequipObject{ RELOCATION_ID(37945, 38901) };
+
+	PFNActorEquipManager_UnequipObject ActorEquipManager_UnequipObject_Trampoline;
+
+	static bool ActorEquipManager_UnequipObject_Hook(
+		RE::ActorEquipManager *self,
+		RE::Actor* a_actor,
+		RE::TESBoundObject* a_object,
+		RE::ExtraDataList* a_extraData,
+		std::uint32_t a_count,
+		const RE::BGSEquipSlot* a_slot,
+		bool a_queueEquip,
+		bool a_forceEquip,
+		bool a_playSounds,
+		bool a_applyNow,
+		const RE::BGSEquipSlot* a_slotToReplace
+	)
 	{
-		DetourDetach((void**)UnequipItem::_unequipItem_GetPtrAddr(), (void*)GetFnAddr(&UnequipItem::unequipItem));
+		ArmorDetachEvent event;
+		event.actor = a_actor;
+		g_armorDetachEventDispatcher.dispatch(event);
+
+		bool ret = ActorEquipManager_UnequipObject_Trampoline(
+			self,
+			a_actor, 
+			a_object, 
+			a_extraData,
+			a_count,
+			a_slot,
+			a_queueEquip, 
+			a_forceEquip,
+			a_playSounds, 
+			a_applyNow,
+			a_slotToReplace
+		);
+
+		event.hasDetached = true;
+		g_armorDetachEventDispatcher.dispatch(event);
+
+		return ret;
 	}
 
-	struct UnkEngine
+	static void ActorEquipManager_SetHooks()
 	{
-		// This is the main loop
-		//https://github.com/powerof3/CommonLibSSE/blob/master/include/RE/M/Main.h
-		MEMBER_FN_PREFIX(UnkEngine);
+		ActorEquipManager_UnequipObject_Trampoline = ActorEquipManager_UnequipObject.get();
+		DetourAttach((void**)&ActorEquipManager_UnequipObject_Trampoline, &ActorEquipManager_UnequipObject_Hook);
+	}
 
-		DEFINE_MEMBER_FN_HOOK(onFrame, void, offset::GameLoopFunction);
-
-		void onFrame();
-
-		// members
-#ifndef SKYRIMVR
-		char unk[0x10];
-		bool                         quitGame;                     // 010
-		bool                         resetGame;                    // 011
-		bool                         fullReset;                    // 012
-		bool                         gameActive;                   // 013
-		bool                         onIdle;                       // 014
-		bool                         reloadContent;                // 015
-		bool                         freezeTime;                   // 016
-		bool                         freezeNextFrame;              // 017
-	};
-	static_assert(offsetof(UnkEngine, quitGame) == 0x10);
-	static_assert(offsetof(UnkEngine, freezeTime) == 0x16);
-#else
-		char unk[0x8];
-		bool                         quitGame;                     // 008
-		bool                         resetGame;                    // 009
-		bool                         fullReset;                    // 00a
-		bool                         gameActive;                   // 00b
-		bool                         onIdle;                       // 00c
-		bool                         reloadContent;                // 00d
-		bool                         freezeTime;                   // 00e
-		bool                         freezeNextFrame;              // 00f
-	};
-	static_assert(offsetof(UnkEngine, quitGame) == 0x08);
-	static_assert(offsetof(UnkEngine, freezeTime) == 0x0e);
-#endif
-
-	struct SyncFrame
+	static void ActorEquipManager_RemoveHooks()
 	{
-		MEMBER_FN_PREFIX(SyncFrame);
-		DEFINE_MEMBER_FN_HOOK(onFrameSync, void, offset::FrameSyncPoint, INT64 param_1);
+		DetourDetach((void**)&ActorEquipManager_UnequipObject_Trampoline, &ActorEquipManager_UnequipObject_Hook);
+	}
 
-		void onFrameSync(INT64 param_1);
-	};
+	// END  : class ActorEquipManager
 
-	void UnkEngine::onFrame()
+	// --------------------------
+
+	// BEGIN: class Main
+
+	typedef void (*PFNMain_Frame)(RE::Main* self);
+	typedef void (*PFNMain_FrameSync)(uint64_t param_1); // this is static
+
+	static REL::Relocation<PFNMain_Frame> Main_Frame{ REL::ID{36564} };
+	static REL::Relocation<PFNMain_FrameSync> Main_FrameSync{ REL::ID{19865} };
+
+	static PFNMain_Frame Main_Frame_Trampoline;
+	static PFNMain_FrameSync Main_FrameSync_Trampoline;
+
+	static void Main_Frame_Hook(RE::Main *self)
 	{
-		CALL_MEMBER_FN(this, onFrame)();
+		Main_Frame_Trampoline(self);
 
-		if (quitGame)
+		if (self->quitGame)
 		{
 			g_shutdownEventDispatcher.dispatch(ShutdownEvent());
 		}
 		else
 		{
 			FrameEvent e;
-			e.gamePaused = this->freezeTime;
+			e.gamePaused = self->freezeTime;
 			g_frameEventDispatcher.dispatch(e);
 		}
 	}
 
-	void SyncFrame::onFrameSync(INT64 param_1)
+	static void Main_FrameSync_Hook(uint64_t param_1)
 	{
-		CALL_MEMBER_FN(this, onFrameSync)(param_1);
+		Main_FrameSync_Trampoline(param_1);
 
 		g_frameSyncEventDispatcher.dispatch(FrameSyncEvent());
 	}
 
-	void hookEngine()
+	static void Main_SetHooks()
 	{
-		DetourAttach((void**)UnkEngine::_onFrame_GetPtrAddr(), (void*)GetFnAddr(&UnkEngine::onFrame));
+		DetourAttach((void**)Main_Frame_Trampoline, &Main_Frame_Hook);
+		DetourAttach((void**)Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
 	}
 
-	void unhookEngine()
+	static void Main_RemoveHooks()
 	{
-		DetourDetach((void**)UnkEngine::_onFrame_GetPtrAddr(), (void*)GetFnAddr(&UnkEngine::onFrame));
+		DetourDetach((void**)Main_Frame_Trampoline, &Main_Frame_Hook);
+		DetourDetach((void**)Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
 	}
 
-	void hookSyncFrame()
-	{
-		DetourAttach((void**)SyncFrame::_onFrameSync_GetPtrAddr(), (void*)GetFnAddr(&SyncFrame::onFrameSync));
-	}
-
-	void unhookSyncFrame()
-	{
-		DetourDetach((void**)SyncFrame::_onFrameSync_GetPtrAddr(), (void*)GetFnAddr(&SyncFrame::onFrameSync));
-	}
+	// END  : class Main
 
 	void hookAll()
 	{
 		DetourRestoreAfterWith();
 		DetourTransactionBegin();
-		hookEngine();
-		hookAttachArmor();
-		hookDetachArmor();
-		hookFaceGen();
-		hookSyncFrame();
+
+		Main_SetHooks();
+		BipedAnim_SetHooks();
+		ActorEquipManager_SetHooks();
+		BSFaceGenNiNode_SetHooks();
+
 		DetourTransactionCommit();
 	}
 
@@ -366,11 +394,12 @@ namespace hdt
 	{
 		DetourRestoreAfterWith();
 		DetourTransactionBegin();
-		unhookEngine();
-		unhookAttachArmor();
-		unhookDetachArmor();
-		unhookFaceGen();
-		unhookSyncFrame();
+
+		BSFaceGenNiNode_RemoveHooks();
+		ActorEquipManager_RemoveHooks();
+		BipedAnim_RemoveHooks();
+		Main_RemoveHooks();
+
 		DetourTransactionCommit();
 	}
 }

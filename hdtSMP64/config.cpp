@@ -1,3 +1,5 @@
+#include "pch.h"
+
 #include "config.h"
 #include "XmlReader.h"
 
@@ -33,7 +35,7 @@ namespace hdt
 					SkyrimPhysicsWorld::get()->m_maxSubSteps = btClamped(reader.readInt(), 1, 60);
 				else
 				{
-					_WARNING("Unknown config : %s", reader.GetLocalName());
+					spdlog::warn("Unknown config : {}", reader.GetLocalName());
 					reader.skipCurrentElement();
 				}
 				break;
@@ -60,7 +62,7 @@ namespace hdt
 					SkyrimPhysicsWorld::get()->m_distanceForMaxWind = btClamped(reader.readFloat(), 0.f, 10000.f);
 				else
 				{
-					_WARNING("Unknown config : ", reader.GetLocalName());
+					spdlog::warn("Unknown config : {}", reader.GetLocalName());
 					reader.skipCurrentElement();
 				}
 				break;
@@ -78,7 +80,7 @@ namespace hdt
 			{
 			case XMLReader::Inspected::StartTag:
 				if (reader.GetLocalName() == "logLevel")
-					gLog.SetLogLevel(static_cast<IDebugLog::LogLevel>(reader.readInt()));
+					spdlog::default_logger()->set_level(static_cast<spdlog::level::level_enum>(reader.readInt()));
 				else if (reader.GetLocalName() == "enableNPCFaceParts")
 					ActorManager::instance()->m_skinNPCFaceParts = reader.readBool();
 				else if (reader.GetLocalName() == "disableSMPHairWhenWigEquipped")
@@ -108,7 +110,7 @@ namespace hdt
 				else if (reader.GetLocalName() == "enableCuda")
 				{
 					if (reader.readBool())
-						_MESSAGE("CUDA isn't built into this version.");
+						spdlog::error("CUDA isn't built into this version.");
 				}
 				else if (reader.GetLocalName() == "cudaDevice") {}
 #endif
@@ -128,7 +130,7 @@ namespace hdt
 					ActorManager::instance()->m_disable1stPersonViewPhysics = reader.readBool();
 				else
 				{
-					_WARNING("Unknown config : %s", reader.GetLocalName());
+					spdlog::warn("Unknown config : {}", reader.GetLocalName());
 					reader.skipCurrentElement();
 				}
 				break;
@@ -153,7 +155,7 @@ namespace hdt
 					smp(reader);
 				else
 				{
-					_WARNING("Unknown config : %s", reader.GetLocalName());
+					spdlog::warn("Unknown config : {}", reader.GetLocalName());
 					reader.skipCurrentElement();
 				}
 				break;
@@ -185,7 +187,7 @@ namespace hdt
 					config(reader);
 				else
 				{
-					_WARNING("Unknown config : %s", reader.GetLocalName());
+					spdlog::warn("Unknown config : {}", reader.GetLocalName());
 					reader.skipCurrentElement();
 				}
 			}

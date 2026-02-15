@@ -7,14 +7,13 @@
 
 #include <atomic>
 #include "ActorManager.h"
-#include "skse64/PapyrusEvents.h"
 
 namespace hdt
 {
 	constexpr float RESET_PHYSICS = -10.0f;
 
 	class SkyrimPhysicsWorld : protected SkinnedMeshWorld, public IEventListener<FrameEvent>,
-		public IEventListener<ShutdownEvent>, public BSTEventSink<SKSECameraEvent>, public IEventListener<FrameSyncEvent>
+		public IEventListener<ShutdownEvent>, public RE::BSTEventSink<SKSE::CameraEvent>, public IEventListener<FrameSyncEvent>
 	{
 	public:
 
@@ -35,7 +34,7 @@ namespace hdt
 		void onEvent(const FrameSyncEvent& e) override;
 		void onEvent(const ShutdownEvent& e) override;
 
-		EventResult ReceiveEvent(SKSECameraEvent* evn, EventDispatcher<SKSECameraEvent>* dispatcher) override;
+		RE::BSEventNotifyControl ProcessEvent(const SKSE::CameraEvent* a_event, RE::BSTEventSource<SKSE::CameraEvent>* a_eventSource) override;
 
 		bool isSuspended() { return m_suspended; }
 
@@ -67,7 +66,7 @@ namespace hdt
 		// @param a_direction wind direction
 		// @a_scale Amount to scale the windForce. Defaults to scaleSkyrim
 		// @a_smoothingSamples How many samples to smooth. Defaults to 8. Must be greater than 0. Value of 1 means no smoothing
-		void setWind(NiPoint3* a_direction, float a_scale = scaleSkyrim, uint32_t a_smoothingSamples = 8);
+		void setWind(const RE::NiPoint3 &a_direction, float a_scale = scaleSkyrim, uint32_t a_smoothingSamples = 8);
 
 		concurrency::task_group m_tasks;
 

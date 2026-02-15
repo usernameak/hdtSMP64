@@ -3,8 +3,6 @@
 #include "../hdtSSEUtils/NetImmerseUtils.h"
 #include "../hdtSSEUtils/FrameworkUtils.h"
 #include "Offsets.h"
-#include <skse64/GameStreams.h>
-#include "skse64/GameReferences.h"
 #include "XmlReader.h"
 
 #include <d3d11.h>
@@ -37,7 +35,7 @@ namespace hdt
 		return -1;
 	}
 
-	SkyrimSystem::SkyrimSystem(NiNode* skeleton)
+	SkyrimSystem::SkyrimSystem(RE::NiNode* skeleton)
 		: m_skeleton(skeleton), m_oldRoot(nullptr)
 	{
 		m_oldRoot = m_skeleton;
@@ -49,7 +47,7 @@ namespace hdt
 	{
 
 		auto newRoot = m_skeleton;
-		while (newRoot->m_parent)newRoot = newRoot->m_parent;
+		while (newRoot->parent)newRoot = newRoot->parent;
 		if (m_oldRoot != newRoot)
 			timeStep = RESET_PHYSICS;
 		
@@ -63,25 +61,24 @@ namespace hdt
 		{
 			if (!this->block_resetting)
 				updateTransformUpDown(m_skeleton, true);
-			m_lastRootRotation = convertNi(m_skeleton->m_worldTransform.rot);
+			m_lastRootRotation = convertNi(m_skeleton->world.rotate);
 		}
-		else if (m_skeleton->m_parent == (*g_thePlayer)->GetNiNode())
+		else if (m_skeleton->parent == RE::PlayerCharacter::GetSingleton()->Get3D2())
 		{
 			if (SkyrimPhysicsWorld::get()->m_resetPc > 0)
 			{
 				timeStep = RESET_PHYSICS;
 				updateTransformUpDown(m_skeleton, true);
-				m_lastRootRotation = convertNi(m_skeleton->m_worldTransform.rot);
+				m_lastRootRotation = convertNi(m_skeleton->world.rotate);
 				SkyrimPhysicsWorld::get()->m_resetPc -= 1;
 			}
-			else if (!PlayerCamera::GetSingleton()->unk162 || PlayerCamera::GetSingleton()->cameraState->stateId == 0)
-				// isWeaponSheathed or potentially isCameraFree || cameraState is first person
+			else if (!RE::PlayerCamera::GetSingleton()->isWeapSheathed || RE::PlayerCamera::GetSingleton()->currentState->id == RE::CameraState::kFirstPerson)
 			{
-				m_lastRootRotation = convertNi(m_skeleton->m_worldTransform.rot);
+				m_lastRootRotation = convertNi(m_skeleton->world.rotate);
 			}
 			else
 			{
-				btQuaternion newRot = convertNi(m_skeleton->m_worldTransform.rot);
+				btQuaternion newRot = convertNi(m_skeleton->world.rotate);
 				btVector3 rotAxis;
 				float rotAngle;
 				btTransformUtil::calculateDiffAxisAngleQuaternion(m_lastRootRotation, newRot, rotAxis, rotAngle);
@@ -95,11 +92,11 @@ namespace hdt
 						rotAngle = btClamped(rotAngle, -limit, limit);
 						btQuaternion clampedRot(rotAxis, rotAngle);
 						m_lastRootRotation = clampedRot * m_lastRootRotation;
-						m_skeleton->m_worldTransform.rot = convertBt(m_lastRootRotation);
+						m_skeleton->world.rotate = convertBt(m_lastRootRotation);
 
-						for (int i = 0; i < m_skeleton->m_children.m_arrayBufLen; ++i)
+						for (int i = 0; i < m_skeleton->children.size(); ++i)
 						{
-							auto node = castNiNode(m_skeleton->m_children.m_data[i]);
+							auto node = m_skeleton->children[i]->AsNode();
 							if (node)
 							{
 								updateTransformUpDown(node, true);
@@ -115,7 +112,7 @@ namespace hdt
 					{
 						timeStep = RESET_PHYSICS;
 						updateTransformUpDown(m_skeleton, true);
-						m_lastRootRotation = convertNi(m_skeleton->m_worldTransform.rot);
+						m_lastRootRotation = convertNi(m_skeleton->world.rotate);
 					}
 				}
 			}
@@ -137,27 +134,24 @@ namespace hdt
 	}
 
 	template <typename ... Args>
-	void SkyrimSystemCreator::Error(const char* fmt, Args ... args)
+	void SkyrimSystemCreator::Error(std::string_view fmt, Args &&... args)
 	{
-		std::string newfmt = std::string("%s(%d,%d):") + fmt;
-		_ERROR(newfmt.c_str(), m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), args...);
+		spdlog::error("{}({},{}):{}", m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), std::vformat(fmt, std::make_format_args(args...)));
 	}
 
 	template <typename ... Args>
-	void SkyrimSystemCreator::Warning(const char* fmt, Args ... args)
+	void SkyrimSystemCreator::Warning(std::string_view fmt, Args &&... args)
 	{
-		std::string newfmt = std::string("%s(%d,%d):") + fmt;
-		_WARNING(newfmt.c_str(), m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), args...);
+		spdlog::warn("{}({},{}):{}", m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), std::vformat(fmt, std::make_format_args(args...)));
 	}
 
 	template <typename ... Args>
-	void SkyrimSystemCreator::VMessage(const char* fmt, Args ... args)
+	void SkyrimSystemCreator::VMessage(std::string_view fmt, Args &&... args)
 	{
-		std::string newfmt = std::string("%s(%d,%d):") + fmt;
-		_VMESSAGE(newfmt.c_str(), m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), args...);
+		spdlog::debug("{}({},{}):{}", m_filePath.c_str(), m_reader->GetRow(), m_reader->GetColumn(), std::vformat(fmt, std::make_format_args(args...)));
 	}
 
-	NiNode* SkyrimSystemCreator::findObjectByName(const IDStr& name)
+	RE::NiNode* SkyrimSystemCreator::findObjectByName(const IDStr& name)
 	{
 		// TODO check it's not a lurker skeleton
 		return findNode(m_skeleton, name->cstr());
@@ -168,7 +162,7 @@ namespace hdt
 		auto bone = static_cast<SkyrimBone*>(m_mesh->findBone(getRenamedBone(name)));
 		if (bone) return bone;
 
-		Warning("Bone %s used before being created, trying to create it with current default values", name->cstr());
+		Warning("Bone {} used before being created, trying to create it with current default values", name->cstr());
 		return createBoneFromNodeName(name);
 	}
 
@@ -180,7 +174,7 @@ namespace hdt
 		return name;
 	}
 
-	Ref<SkyrimSystem> SkyrimSystemCreator::createOrUpdateSystem(NiNode* skeleton, NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<IDStr, IDStr> renameMap, SkyrimSystem* old_system)
+	Ref<SkyrimSystem> SkyrimSystemCreator::createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<IDStr, IDStr> renameMap, SkyrimSystem* old_system)
 	{
 		auto path = file->first;
 		if (path.empty()) return nullptr;
@@ -305,7 +299,7 @@ namespace hdt
 					}
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -315,7 +309,7 @@ namespace hdt
 		}
 		catch (const std::string& err)
 		{
-			Error("xml parse error - %s", err.c_str());
+			Error("xml parse error - {}", err.c_str());
 			return nullptr;
 		}
 
@@ -324,7 +318,7 @@ namespace hdt
 
 		if (m_reader->GetErrorCode() != Xml::ErrorCode::None)
 		{
-			Error("xml parse error - %s", m_reader->GetErrorMessage());
+			Error("xml parse error - {}", m_reader->GetErrorMessage());
 			return nullptr;
 		}
 
@@ -389,7 +383,7 @@ namespace hdt
 				}
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -463,7 +457,7 @@ namespace hdt
 				}
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -482,7 +476,7 @@ namespace hdt
 			auto iter = m_shapes.find(shapeName);
 			if (iter != m_shapes.end())
 				return iter->second;
-			Warning("unknown shape - %s", shapeName.c_str());
+			Warning("unknown shape - {}", shapeName.c_str());
 			return nullptr;
 		}
 		if (typeStr == "box")
@@ -500,7 +494,7 @@ namespace hdt
 						margin = m_reader->readFloat();
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -523,7 +517,7 @@ namespace hdt
 						radius = m_reader->readFloat();
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -547,7 +541,7 @@ namespace hdt
 						height = m_reader->readFloat();
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -571,7 +565,7 @@ namespace hdt
 						margin = m_reader->readFloat();
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -599,7 +593,7 @@ namespace hdt
 						margin = m_reader->readFloat();
 					else
 					{
-						Warning("unknown element - %s", name.c_str());
+						Warning("unknown element - {}", name.c_str());
 						m_reader->skipCurrentElement();
 					}
 				}
@@ -639,7 +633,7 @@ namespace hdt
 									shape = readShape();
 								else
 								{
-									Warning("unknown element - %s", name.c_str());
+									Warning("unknown element - {}", name.c_str());
 									m_reader->skipCurrentElement();
 								}
 							}
@@ -659,7 +653,7 @@ namespace hdt
 			}
 			return ret->getNumChildShapes() ? ret : nullptr;
 		}
-		Warning("Unknown shape type %s", typeStr.c_str());
+		Warning("Unknown shape type {}", typeStr.c_str());
 		return nullptr;
 	}
 
@@ -668,7 +662,7 @@ namespace hdt
 		IDStr name = getRenamedBone(m_reader->getAttribute("name"));
 		if (m_mesh->findBone(name))
 		{
-			Warning("Bone %s already exists, skipped", name->cstr());
+			Warning("Bone {} already exists, skipped", name->cstr());
 			return;
 		}
 
@@ -682,11 +676,11 @@ namespace hdt
 		auto node = findObjectByName(bodyName);
 		if (node)
 		{
-			VMessage("Found node named %s, creating bone", bodyName->cstr());
+			VMessage("Found node named {}, creating bone", bodyName->cstr());
 			auto boneTemplate = getBoneTemplate(templateName);
 			if (readTemplate)
 				readBoneTemplate(boneTemplate);
-			auto bone = new SkyrimBone(node->m_name, node, this->m_skeleton, boneTemplate);
+			auto bone = new SkyrimBone(node->name.c_str(), node, this->m_skeleton, boneTemplate);
 			bone->m_localToRig = boneTemplate.m_centerOfMassTransform;
 			bone->m_rigToLocal = boneTemplate.m_centerOfMassTransform.inverse();
 			bone->m_marginMultipler = boneTemplate.m_marginMultipler;
@@ -697,7 +691,7 @@ namespace hdt
 				auto old_b = old_system->findBone(bodyName);
 				if (old_b)
 				{
-					bone->m_currentTransform = convertNi(bone->m_skeleton->m_worldTransform) * old_b->m_origToSkeletonTransform;
+					bone->m_currentTransform = convertNi(bone->m_skeleton->world) * old_b->m_origToSkeletonTransform;
 					auto dest = bone->m_currentTransform.asTransform() * bone->m_localToRig;
 					bone->m_origToSkeletonTransform = old_b->m_origToSkeletonTransform;
 					bone->m_origTransform = old_b->m_origTransform;
@@ -718,7 +712,7 @@ namespace hdt
 			m_mesh->m_bones.push_back(bone);
 			return bone;
 		}
-		Warning("Node named %s doesn't exist, skipped, no bone created", bodyName->cstr());
+		Warning("Node named {} doesn't exist, skipped, no bone created", bodyName->cstr());
 		return nullptr;
 	}
 
@@ -773,73 +767,73 @@ namespace hdt
 				continue;
 			}
 
-			if (!triShape->m_spSkinInstance)
+			if (!triShape->skinInstance)
 			{
 				continue;
 			}
-			NiSkinInstance* skinInstance = triShape->m_spSkinInstance;
-			NiSkinData* skinData = skinInstance->m_spSkinData;
-			for (int boneIdx = 0; boneIdx < skinData->m_uiBones; ++boneIdx)
+			RE::NiSkinInstance* skinInstance = triShape->skinInstance.get();
+			RE::NiSkinData* skinData = skinInstance->skinData.get();
+			for (int boneIdx = 0; boneIdx < skinData->bones; ++boneIdx)
 			{
-				auto node = skinInstance->m_ppkBones[boneIdx];
-				auto boneData = &skinData->m_pkBoneData[boneIdx];
-				auto boundingSphere = BoundingSphere(convertNi(boneData->m_kBound.pos), boneData->m_kBound.radius);
-				IDStr boneName = node->m_name;
+				auto node = skinInstance->bones[boneIdx];
+				auto boneData = &skinData->boneData[boneIdx];
+				auto boundingSphere = BoundingSphere(convertNi(boneData->bound.center), boneData->bound.radius);
+				IDStr boneName = node->name.c_str();
 				auto bone = m_mesh->findBone(boneName);
 				if (!bone)
 				{
 					auto defaultBoneInfo = getBoneTemplate("");
-					bone = new SkyrimBone(boneName, node->GetAsNiNode(), this->m_skeleton, defaultBoneInfo);
+					bone = new SkyrimBone(boneName, node->AsNode(), this->m_skeleton, defaultBoneInfo);
 					m_mesh->m_bones.push_back(bone);
-					VMessage("Created bone %s added to body %s, created without default values", boneName->cstr(), name);
+					VMessage("Created bone {} added to body {}, created without default values", boneName->cstr(), name);
 				}
 
-				body->addBone(bone, convertNi(boneData->m_kSkinToBone), boundingSphere);
+				body->addBone(bone, convertNi(boneData->skinToBone), boundingSphere);
 			}
 
-			NiSkinPartition* skinPartition = triShape->m_spSkinInstance->m_spSkinPartition;
+			RE::NiSkinPartition* skinPartition = skinInstance->skinPartition.get();
 			body->m_vertices.resize(vertexStart + skinPartition->vertexCount);
 
 			// vertices data are all the same in every partitions
-			auto partition = skinPartition->m_pkPartitions;
-			auto vFlags = NiSkinPartition::GetVertexFlags(partition->vertexDesc);
-			auto vSize = NiSkinPartition::GetVertexSize(partition->vertexDesc);
+			auto &partition = skinPartition->partitions[0];
+			RE::BSGraphics::Vertex::Flags vFlags = partition.vertexDesc.GetFlags();
+			uint32_t vSize = partition.vertexDesc.GetSize();
 
-			auto vertexBlock = partition->shapeData->m_RawVertexData;
-			UInt8* dynamicVData = nullptr;
+			uint8_t *vertexBlock = partition.buffData->rawVertexData;
+			uint8_t *dynamicVData = nullptr;
 			if (dynamicShape)
-				dynamicVData = static_cast<UInt8*>(dynamicShape->pDynamicData);
+				dynamicVData = static_cast<uint8_t *>(dynamicShape->dynamicData);
 
 			uint8_t boneOffset = 0;
 
-			if (vFlags & VF_VERTEX)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_VERTEX)
 				boneOffset += 16;
-			if (vFlags & VF_UV)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_UV)
 				boneOffset += 4;
-			if (vFlags & VF_UV_2)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_UV_2)
 				boneOffset += 4;
-			if (vFlags & VF_NORMAL)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_NORMAL)
 				boneOffset += 4;
-			if (vFlags & VF_TANGENT)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_TANGENT)
 				boneOffset += 4;
-			if (vFlags & VF_COLORS)
+			if (vFlags & RE::BSGraphics::Vertex::Flags::VF_COLORS)
 				boneOffset += 4;
 
 			for (int j = 0; j < skinPartition->vertexCount; ++j)
 			{
-				NiPoint3* vertexPos;
+				RE::NiPoint3* vertexPos;
 
 				if (dynamicShape)
-					vertexPos = reinterpret_cast<NiPoint3*>(&dynamicVData[j * 16]);
+					vertexPos = reinterpret_cast<RE::NiPoint3*>(&dynamicVData[j * 16]);
 				else
-					vertexPos = reinterpret_cast<NiPoint3*>(&vertexBlock[j * vSize]);
+					vertexPos = reinterpret_cast<RE::NiPoint3*>(&vertexBlock[j * vSize]);
 
 				body->m_vertices[j + vertexStart].m_skinPos = convertNi(*vertexPos);
 
 				SkyrimSystem::BoneData* boneData = reinterpret_cast<SkyrimSystem::BoneData*>(&vertexBlock[j * vSize +
 					boneOffset]);
 
-				for (int k = 0; k < partition->m_usBonesPerVertex && k < 4; ++k)
+				for (int k = 0; k < partition.bonesPerVertex && k < 4; ++k)
 				{
 					auto localBoneIndex = boneData->boneIndices[k];
 					assert(localBoneIndex < body->m_skinnedBones.size());
@@ -946,7 +940,7 @@ namespace hdt
 				}
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -976,21 +970,21 @@ namespace hdt
 		for (auto entry : vertexOffsetMap)
 		{
 			auto* g = castBSTriShape(findObject(m_model, entry.first.c_str()));
-			if (g->m_spSkinInstance)
+			if (g->skinInstance)
 			{
 				int offset = entry.second;
-				NiSkinPartition* skinPartition = g->m_spSkinInstance->m_spSkinPartition;
-				for (int i = 0; i < skinPartition->m_uiPartitions; ++i)
+				RE::NiSkinPartition* skinPartition = g->skinInstance->skinPartition.get();
+				for (int i = 0; i < skinPartition->numPartitions; ++i)
 				{
-					auto& partition = skinPartition->m_pkPartitions[i];
-					for (int j = 0; j < partition.m_usTriangles; ++j)
-						shape->addTriangle(partition.m_pusTriList[j * 3] + offset, partition.m_pusTriList[j * 3 + 1] + offset,
-							partition.m_pusTriList[j * 3 + 2] + offset);
+					auto& partition = skinPartition->partitions[i];
+					for (int j = 0; j < partition.triangles; ++j)
+						shape->addTriangle(partition.triList[j * 3] + offset, partition.triList[j * 3 + 1] + offset,
+							partition.triList[j * 3 + 2] + offset);
 				}
 			}
 			else
 			{
-				Warning("Shape %s has no skin data, skipped", entry.first.c_str());
+				Warning("Shape {} has no skin data, skipped", entry.first.c_str());
 				return nullptr;
 			}
 		}
@@ -1066,7 +1060,7 @@ namespace hdt
 				}
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -1093,7 +1087,7 @@ namespace hdt
 					tr.getOrigin().setY(m_reader->readFloat());
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -1205,7 +1199,7 @@ namespace hdt
 					dest.angularBounce = m_reader->readVector3();
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -1222,7 +1216,7 @@ namespace hdt
 
 		if (!bodyA)
 		{
-			Warning("constraint %s <-> %s : bone for bodyA doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint {} <-> {} : bone for bodyA doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
 			bodyA = createBoneFromNodeName(bodyAName);
 			if (!bodyA)
 			{
@@ -1232,7 +1226,7 @@ namespace hdt
 		}
 		if (!bodyB)
 		{
-			Warning("constraint %s <-> %s : bone for bodyB doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint {} <-> {} : bone for bodyB doesn't exist, will try to create it", bodyAName->cstr(), bodyBName->cstr());
 			bodyB = createBoneFromNodeName(bodyBName);
 			if (!bodyB)
 			{
@@ -1242,19 +1236,19 @@ namespace hdt
 		}
 		if (bodyA == bodyB)
 		{
-			Warning("constraint between same object %s <-> %s, skipped", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint between same object {} <-> {}, skipped", bodyAName->cstr(), bodyBName->cstr());
 			m_reader->skipCurrentElement();
 			return false;
 		}
 
 		if (bodyA->m_rig.isKinematicObject() && bodyB->m_rig.isKinematicObject())
 		{
-			Warning("constraint between two kinematic object %s <-> %s, skipped", bodyAName->cstr(), bodyBName->cstr());
+			Warning("constraint between two kinematic object {} <-> {}, skipped", bodyAName->cstr(), bodyBName->cstr());
 			m_reader->skipCurrentElement();
 			return false;
 		}
 
-		VMessage("OK: constraint between object %s <-> %s", bodyAName->cstr(), bodyBName->cstr());
+		VMessage("OK: constraint between object {} <-> {}", bodyAName->cstr(), bodyBName->cstr());
 		return true;
 	}
 
@@ -1370,10 +1364,13 @@ namespace hdt
 			constraint->setEquilibriumPoint(i, cinfo.linearEquilibrium[i]);
 			constraint->setEquilibriumPoint(i + 3, cinfo.angularEquilibrium[i]);
 
+#if 0
+			// UPGRADE TODO: non-hookean stuff
 			constraint->setNonHookeanDamping(i, cinfo.linearNonHookeanDamping[i]);
 			constraint->setNonHookeanDamping(i + 3, cinfo.angularNonHookeanDamping[i]);
 			constraint->setNonHookeanStiffness(i, cinfo.linearNonHookeanStiffness[i]);
 			constraint->setNonHookeanStiffness(i + 3, cinfo.angularNonHookeanStiffness[i]);
+#endif
 
 			constraint->enableSpring(i, cinfo.enableLinearSprings);
 			constraint->enableSpring(i + 3, cinfo.enableAngularSprings);
@@ -1415,18 +1412,18 @@ namespace hdt
 			{
 				auto name = m_reader->GetName();
 				if (name == "minDistanceFactor")
-					dest.minDistanceFactor = std::max(m_reader->readFloat(), 0.0f);
+					dest.minDistanceFactor = (std::max)(m_reader->readFloat(), 0.0f);
 				else if (name == "maxDistanceFactor")
-					dest.maxDistanceFactor = std::max(m_reader->readFloat(), 0.0f);
+					dest.maxDistanceFactor = (std::max)(m_reader->readFloat(), 0.0f);
 				else if (name == "stiffness")
-					dest.stiffness = std::max(m_reader->readFloat(), 0.0f);
+					dest.stiffness = (std::max)(m_reader->readFloat(), 0.0f);
 				else if (name == "damping")
-					dest.damping = std::max(m_reader->readFloat(), 0.0f);
+					dest.damping = (std::max)(m_reader->readFloat(), 0.0f);
 				else if (name == "equilibrium")
 					dest.equilibriumFactor = btClamped(m_reader->readFloat(), 0.0f, 1.0f);
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}
@@ -1444,11 +1441,11 @@ namespace hdt
 				auto name = m_reader->GetName();
 				if (parseFrameType(name, dest.frameType, dest.frame));
 				else if (name == "swingSpan1" || name == "coneLimit" || name == "limitZ")
-					dest.swingSpan1 = std::max(m_reader->readFloat(), 0.f);
+					dest.swingSpan1 = (std::max)(m_reader->readFloat(), 0.f);
 				else if (name == "swingSpan2" || name == "planeLimit" || name == "limitY")
-					dest.swingSpan2 = std::max(m_reader->readFloat(), 0.f);
+					dest.swingSpan2 = (std::max)(m_reader->readFloat(), 0.f);
 				else if (name == "twistSpan" || name == "twistLimit" || name == "limitX")
-					dest.twistSpan = std::max(m_reader->readFloat(), 0.f);
+					dest.twistSpan = (std::max)(m_reader->readFloat(), 0.f);
 				else if (name == "limitSoftness")
 					dest.limitSoftness = btClamped(m_reader->readFloat(), 0.f, 1.f);
 				else if (name == "biasFactor")
@@ -1457,7 +1454,7 @@ namespace hdt
 					dest.relaxationFactor = btClamped(m_reader->readFloat(), 0.f, 1.f);
 				else
 				{
-					Warning("unknown element - %s", name.c_str());
+					Warning("unknown element - {}", name.c_str());
 					m_reader->skipCurrentElement();
 				}
 			}

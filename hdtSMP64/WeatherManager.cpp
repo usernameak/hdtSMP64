@@ -1,10 +1,11 @@
+#include "pch.h"
+
 #include "WeatherManager.h"
+
 using namespace hdt;
 
-
-Sky** g_SkyPtr = nullptr;
-NiPoint3 precipDirection {0.f, 0.f, 0.f};
-std::vector<UInt32> notExteriorWorlds = { 0x69857, 0x1EE62, 0x20DCB, 0x1FAE2, 0x34240, 0x50015, 0x2C965, 0x29AB7, 0x4F838, 0x3A9D6, 0x243DE, 0xC97EB, 0xC350D, 0x1CDD3, 0x1CDD9, 0x21EDB, 0x1E49D, 0x2B101, 0x2A9D8, 0x20BFE };
+RE::NiPoint3 precipDirection {0.f, 0.f, 0.f};
+std::vector<uint32_t> notExteriorWorlds = { 0x69857, 0x1EE62, 0x20DCB, 0x1FAE2, 0x34240, 0x50015, 0x2C965, 0x29AB7, 0x4F838, 0x3A9D6, 0x243DE, 0xC97EB, 0xC350D, 0x1CDD3, 0x1CDD9, 0x21EDB, 0x1E49D, 0x2B101, 0x2A9D8, 0x20BFE };
 
 
 static inline size_t randomGeneratorLowMoreProbable(size_t lowermin, size_t lowermax, size_t highermin, size_t highermax, int probability) {
@@ -42,51 +43,45 @@ size_t hdt::randomGenerator(size_t min, size_t max) {
 	return dist(rng);
 }
 
-static inline NiPoint3 crossProduct(NiPoint3 A, NiPoint3 B)
+static inline RE::NiPoint3 crossProduct(RE::NiPoint3 A, RE::NiPoint3 B)
 {
-	return NiPoint3(A.y * B.z - A.z * B.y, A.z * B.x - A.x * B.z, A.x * B.y - A.y * B.x);
+	return RE::NiPoint3(A.y * B.z - A.z * B.y, A.z * B.x - A.x * B.z, A.x * B.y - A.y * B.x);
 }
 
 // Calculates a dot product
-static inline float dot(NiPoint3 a, NiPoint3 b)
+static inline float dot(RE::NiPoint3 a, RE::NiPoint3 b)
 {
 	return a.x * b.x + a.y * b.y + a.z * b.z;
 }
 
 // Calculates a cross product
-static inline NiPoint3 cross(NiPoint3 a, NiPoint3 b)
+static inline RE::NiPoint3 cross(RE::NiPoint3 a, RE::NiPoint3 b)
 {
-	return NiPoint3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+	return RE::NiPoint3(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
 }
 
-static inline NiPoint3 rotate(const NiPoint3& v, const NiPoint3& axis, float theta)
+static inline RE::NiPoint3 rotate(const RE::NiPoint3& v, const RE::NiPoint3& axis, float theta)
 {
 	const float cos_theta = cosf(theta);
 
 	return (v * cos_theta) + (crossProduct(axis, v) * sinf(theta)) + (axis * dot(axis, v)) * (1 - cos_theta);
 }
 
-float hdt::magnitude(NiPoint3 p)
-{
-	return sqrtf(p.x * p.x + p.y * p.y + p.z * p.z);
-}
-
 void hdt::WeatherCheck()
 {
-	TESObjectCELL* cell = nullptr;
+	RE::TESObjectCELL * cell = nullptr;
 
-	Actor* player = nullptr;
-	g_SkyPtr = RelocPtr<Sky*>(offset::SkyPointer);
+	RE::Actor* player = nullptr;
 
 	const auto world = SkyrimPhysicsWorld::get();
 	while (true)
 	{
-		player = DYNAMIC_CAST(LookupFormByID(0x14), TESForm, Actor);
-		if (!player || !player->loadedState)
+		player = RE::PlayerCharacter::GetSingleton();
+		if (!player || !player->loadedData)
 		{
 			//LOG("player null. Waiting for 5seconds");
-			world->setWind(&NiPoint3{ 0,0,0 }, 0, 1); // remove wind immediately
-			Sleep(5000);
+			world->setWind(RE::NiPoint3::Zero(), 0, 1); // remove wind immediately
+			REX::W32::Sleep(5000);
 			continue;
 		}
 
@@ -94,20 +89,16 @@ void hdt::WeatherCheck()
 
 		if (!cell)
 		{
-			world->setWind(&NiPoint3{ 0,0,0 }, 0, 1); // remove wind immediately
+			world->setWind(RE::NiPoint3::Zero(), 0, 1); // remove wind immediately
 			continue;
 		}
 
-#ifdef SKYRIMVR
-		TESWorldSpace* worldSpace = cell->unk120;
-#else
-		TESWorldSpace* worldSpace = cell->worldSpace;
-#endif
+		RE::TESWorldSpace *worldSpace = cell->worldSpace;
 		if (!worldSpace) // Interior cell
 		{
 			//LOG("In interior cell. Waiting for 5 seconds");
-			world->setWind(&NiPoint3{ 0,0,0 }, 0, 1); // remove wind immediately
-			Sleep(5000);
+			world->setWind(RE::NiPoint3::Zero(), 0, 1); // remove wind immediately
+			REX::W32::Sleep(5000);
 			continue;
 		}
 		else
@@ -115,49 +106,49 @@ void hdt::WeatherCheck()
 			if (std::find(notExteriorWorlds.begin(), notExteriorWorlds.end(), worldSpace->formID) != notExteriorWorlds.end())
 			{
 				//LOG("In interior cell world. Waiting for 5 seconds");
-				world->setWind(&NiPoint3{ 0,0,0 }, 0, 1); // remove wind immediately
-				Sleep(5000);
+				world->setWind(RE::NiPoint3::Zero(), 0, 1); // remove wind immediately
+				REX::W32::Sleep(5000);
 				continue;
 			}
 		}
 
-		const auto skyPtr = *g_SkyPtr;
+		const auto skyPtr = RE::Sky::GetSingleton();
 		if (skyPtr)
 		{
 			//Wind Detection
 			const float range = (randomGeneratorLowMoreProbable(0, 5, 6, 50, 10) / 10.0f);
-			precipDirection = NiPoint3{ 0.f, 1.f, 0.f };
+			precipDirection = RE::NiPoint3{ 0.f, 1.f, 0.f };
 			if (skyPtr->currentWeather)
 			{
-				_MESSAGE("Wind Speed: %2.2g, Wind Direction: %2.2g, Weather Wind Speed: %2.2g WindDir:%2.2g WindDirRange:%2.2g", skyPtr->windSpeed, skyPtr->windDirection,
-					skyPtr->currentWeather->general.windSpeed, skyPtr->currentWeather->general.windDirection * 180.0f / 256.0f, skyPtr->currentWeather->general.windDirRange * 360.0f / 256.0f
+				spdlog::info("Wind Speed: {:2.2g}, Wind Direction: {:2.2g}, Weather Wind Speed: {} WindDir:{:2.2g} WindDirRange:{:2.2g}", skyPtr->windSpeed, skyPtr->windAngle,
+					skyPtr->currentWeather->data.windSpeed, skyPtr->currentWeather->data.windDirection * 180.0f / 256.0f, skyPtr->currentWeather->data.windDirectionRange * 360.0f / 256.0f
 				);
 				// use weather wind info
 				//Wind Speed is the only thing that changes. Wind direction and range are same all the time as set in CK.
 				const float theta = (((
-					skyPtr->currentWeather->general.windDirection
+					skyPtr->currentWeather->data.windDirection
 					) * 180.0f) / 256.0f) - 90.f + randomGenerator(-range, range);
-				precipDirection = rotate(precipDirection, NiPoint3(0, 0, 1.0f), theta / 57.295776f);
-				world->setWind(&precipDirection, world->m_windStrength * scaleSkyrim * skyPtr->windSpeed);
+				precipDirection = rotate(precipDirection, RE::NiPoint3(0, 0, 1.0f), theta / 57.295776f);
+				world->setWind(precipDirection, world->m_windStrength * scaleSkyrim * skyPtr->windSpeed);
 			}else {
-				_MESSAGE("Wind Speed: %2.2g, Wind Direction: %2.2g", skyPtr->windSpeed, skyPtr->windDirection);
+				spdlog::info("Wind Speed: {:2.2g}, Wind Direction: {:2.2g}", skyPtr->windSpeed, skyPtr->windAngle);
 				// use sky wind info
-				const float theta = (((skyPtr->windDirection) * 180.0f) / 256.0f) - 90.f + (randomGenerator(0, 2 * range) - range);
-				precipDirection = rotate(precipDirection, NiPoint3(0, 0, 1.0f), theta / 57.295776f);
-				world->setWind(&precipDirection, world->m_windStrength * scaleSkyrim * skyPtr->windSpeed);
+				const float theta = (((skyPtr->windAngle) * 180.0f) / 256.0f) - 90.f + (randomGenerator(0, 2 * range) - range);
+				precipDirection = rotate(precipDirection, RE::NiPoint3(0, 0, 1.0f), theta / 57.295776f);
+				world->setWind(precipDirection, world->m_windStrength * scaleSkyrim * skyPtr->windSpeed);
 			}
-			Sleep(500);
+			REX::W32::Sleep(500);
 		}
 		else
 		{
-			world->setWind(&NiPoint3{ 0,0,0 }, 0, 1); // remove wind immediately
+			world->setWind(RE::NiPoint3::Zero(), 0, 1); // remove wind immediately
 			//LOG("Sky is null. waiting for 5 seconds.");
-			Sleep(5000);
+			REX::W32::Sleep(5000);
 		}
 	}
 }
 
-NiPoint3* hdt::getWindDirection()
+RE::NiPoint3* hdt::getWindDirection()
 {
 	return &precipDirection;
 }

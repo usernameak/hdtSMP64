@@ -248,7 +248,7 @@ namespace hdt
 
 	void ColliderTree::remapColliders(Collider* start, Aabb* startAabb)
 	{
-		colliders.swap(vectorA16<Collider>());
+		colliders = vectorA16<Collider>();
 		auto offset = (size_t)cbuf;
 		cbuf = start + offset;
 		aabb = startAabb + offset;

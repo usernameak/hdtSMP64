@@ -1,9 +1,10 @@
+#include "pch.h"
+
 #include "hdtSkyrimPhysicsWorld.h"
 #include <ppl.h>
 #include "Offsets.h"
 #include "PluginInterfaceImpl.h"
-
-#include "skse64/GameMenus.h"
+#include "SkyrimExtras.h"
 
 namespace hdt
 {
@@ -72,7 +73,7 @@ namespace hdt
 			// to have one average computation each frame when everything is usual.
 			// In case of poor fps, we set it to the configured minimum engine value (60 Hz),
 			// to still allow a physics with max increments of 1/60s.
-			const auto tick = std::min(m_averageInterval, m_timeTick);
+			const auto tick = (std::min)(m_averageInterval, m_timeTick);
 
 			// No need to calculate physics when too little time has passed (time exceptionally short since last computation).
 			// This magic value directly impacts the number of computations and the time cost of the mod...
@@ -85,7 +86,7 @@ namespace hdt
 				// So, we guarantee no jitter for fps greater than min-fps / maxSubsteps.
 				// For example, if min-fps = 60 and maxSubsteps = 4, we guarantee no jitter for 15+ fps,
 				// at the cost of additional simulations.
-				const auto remainingTimeStep = std::min(m_accumulatedInterval, tick * m_maxSubSteps);
+				const auto remainingTimeStep = (std::min)(m_accumulatedInterval, tick * m_maxSubSteps);
 
 				readTransform(remainingTimeStep);
 
@@ -103,12 +104,10 @@ namespace hdt
 
 		_MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
 
-		LARGE_INTEGER ticks;
 		int64_t startTime = 0;
 		if (m_doMetrics)
 		{
-			QueryPerformanceCounter(&ticks);
-			startTime = ticks.QuadPart;
+			REX::W32::QueryPerformanceCounter(&startTime);
 		}
 
 		g_pluginInterface.onPreStep({ getCollisionObjectArray(), remainingTimeStep });
@@ -125,11 +124,12 @@ namespace hdt
 
 		if (m_doMetrics)
 		{
-			QueryPerformanceCounter(&ticks);
-			int64_t endTime = ticks.QuadPart;
-			QueryPerformanceFrequency(&ticks);
+			int64_t endTime;
+			REX::W32::QueryPerformanceCounter(&endTime);
+			int64_t freq;
+			REX::W32::QueryPerformanceFrequency(&freq);
 			// float ticks_per_ms = static_cast<float>(ticks.QuadPart) * 1e-3;
-			float lastProcessingTime = (endTime - startTime) / static_cast<float>(ticks.QuadPart) * 1e3;
+			float lastProcessingTime = (endTime - startTime) / static_cast<float>(freq) * 1e3;
 			m_2ndStepAverageProcessingTime = (m_2ndStepAverageProcessingTime + lastProcessingTime) * 0.5;
 		}
 	}
@@ -180,16 +180,16 @@ namespace hdt
 		}
 	}
 
-	void SkyrimPhysicsWorld::setWind(NiPoint3* a_point, float a_scale, uint32_t a_smoothingSamples)
+	void SkyrimPhysicsWorld::setWind(const RE::NiPoint3 &a_point, float a_scale, uint32_t a_smoothingSamples)
 	{
 		if (a_smoothingSamples == 0) {
-			_ERROR("setWind a_smoothingSamples must be > 0; values ignored");
+			spdlog::error("setWind a_smoothingSamples must be > 0; values ignored");
 			return;
 		}
 		const auto oldValueWeight = a_smoothingSamples - 1;
-		if (!btFuzzyZero((m_windSpeed - btVector3(a_point->x, a_point->y, a_point->z)).length())) {
-			m_windSpeed.setValue((oldValueWeight * m_windSpeed.getX() + a_point->x * a_scale) / a_smoothingSamples, (oldValueWeight * m_windSpeed.getY() + a_point->y * a_scale) / a_smoothingSamples, (oldValueWeight * m_windSpeed.getZ() + a_point->z * a_scale) / a_smoothingSamples);
-			_DMESSAGE("Wind Speed now (%2.2g, %2.2g, %2.2g), target (%2.2g, %2.2g, %2.2g) using %d samples.", m_windSpeed.getX(), m_windSpeed.getY(), m_windSpeed.getZ(), a_point->x * a_scale, a_point->y * a_scale, a_point->z * a_scale, a_smoothingSamples);
+		if (!btFuzzyZero((m_windSpeed - btVector3(a_point.x, a_point.y, a_point.z)).length())) {
+			m_windSpeed.setValue((oldValueWeight * m_windSpeed.getX() + a_point.x * a_scale) / a_smoothingSamples, (oldValueWeight * m_windSpeed.getY() + a_point.y * a_scale) / a_smoothingSamples, (oldValueWeight * m_windSpeed.getZ() + a_point.z * a_scale) / a_smoothingSamples);
+			spdlog::trace("Wind Speed now ({:2.2g}, {:2.2g}, {:2.2g}), target ({:2.2g}, {:2.2g}, {:2.2g}) using {} samples.", m_windSpeed.getX(), m_windSpeed.getY(), m_windSpeed.getZ(), a_point.x * a_scale, a_point.y * a_scale, a_point.z * a_scale, a_smoothingSamples);
 		}
 	}
 
@@ -201,7 +201,7 @@ namespace hdt
 			std::unordered_map<IDStr, std::vector<SkyrimBody*>> list;
 		};
 
-		std::unordered_map<NiNode*, Group> maps;
+		std::unordered_map<RE::NiNode*, Group> maps;
 
 		IDStr invalidString;
 		for (auto& i : m_systems)
@@ -296,26 +296,24 @@ namespace hdt
 
 	void SkyrimPhysicsWorld::onEvent(const FrameEvent& e)
 	{
-		auto mm = MenuManager::GetSingleton();
+		auto *mm = RE::UI::GetSingleton();
 
-		if ((e.gamePaused || mm->IsGamePaused()) && !m_suspended)
+		if ((e.gamePaused || mm->GameIsPaused()) && !m_suspended)
 			suspend();
-		else if (!(e.gamePaused || mm->IsGamePaused()) && m_suspended)
+		else if (!(e.gamePaused || mm->GameIsPaused()) && m_suspended)
 			resume();
 
-		LARGE_INTEGER ticks;
 		int64_t startTime = 0;
 		int64_t endTime = 0;
 		float lastProcessingTime = 0.f;
 		if (m_doMetrics)
 		{
-			QueryPerformanceCounter(&ticks);
-			startTime = ticks.QuadPart;
+			REX::W32::QueryPerformanceCounter(&startTime);
 		}
 
 		std::lock_guard<decltype(m_lock)> l(m_lock);
 
-		float interval = *(float*)(RelocationManager::s_baseAddr + (m_useRealTime ? offset::GameStepTimer_RealTime : offset::GameStepTimer_SlowTime));
+		float interval = m_useRealTime ? GetGameStepRealTime() : RE::GetSecondsSinceLastFrame();
 
 		if (interval > FLT_EPSILON && !m_suspended && !m_isStasis && !m_systems.empty())
 			doUpdate(interval);
@@ -324,11 +322,11 @@ namespace hdt
 
 		if (m_doMetrics)
 		{
-			QueryPerformanceCounter(&ticks);
-			endTime = ticks.QuadPart;
-			QueryPerformanceFrequency(&ticks);
+			REX::W32::QueryPerformanceCounter(&endTime);
+			int64_t freq;
+			REX::W32::QueryPerformanceFrequency(&freq);
 			// float ticks_per_ms = static_cast<float>(ticks.QuadPart) * 1e-3;
-			m_SMPProcessingTimeInMainLoop = (endTime - startTime) / static_cast<float>(ticks.QuadPart) * 1e3;
+			m_SMPProcessingTimeInMainLoop = (endTime - startTime) / static_cast<float>(freq) * 1e3;
 		}
 	}
 
@@ -336,20 +334,18 @@ namespace hdt
 	{
 		if (m_doMetrics)
 		{
-			LARGE_INTEGER ticks;
-			QueryPerformanceCounter(&ticks);
-			int64_t startTime = ticks.QuadPart;
+			int64_t startTime, endTime, freq;
+			REX::W32::QueryPerformanceCounter(&startTime);
 
 			m_tasks.wait();
 
-			QueryPerformanceCounter(&ticks);
-			int64_t endTime = ticks.QuadPart;
-			QueryPerformanceFrequency(&ticks);
+			REX::W32::QueryPerformanceCounter(&endTime);
+			REX::W32::QueryPerformanceFrequency(&freq);
 			// float ticks_per_ms = static_cast<float>(ticks.QuadPart) * 1e-3;
-			m_SMPProcessingTimeInMainLoop += (endTime - startTime) / static_cast<float>(ticks.QuadPart) * 1e3;
+			m_SMPProcessingTimeInMainLoop += (endTime - startTime) / static_cast<float>(freq) * 1e3;
 			m_averageSMPProcessingTimeInMainLoop = (m_averageSMPProcessingTimeInMainLoop * (m_sampleSize - 1) + m_SMPProcessingTimeInMainLoop) / m_sampleSize;
 			float totalSMPTime = m_averageSMPProcessingTimeInMainLoop + m_2ndStepAverageProcessingTime;
-			_VMESSAGE("smp cost in main loop (msecs): %2.2g, cost outside main loop: %2.2g, percentage outside vs total: %2.2f%%", m_averageSMPProcessingTimeInMainLoop, m_2ndStepAverageProcessingTime, 100. * m_2ndStepAverageProcessingTime / totalSMPTime);
+			spdlog::debug("smp cost in main loop (msecs): {:2.2g}, cost outside main loop: {:2.2g}, percentage outside vs total: {:2.2f}%", m_averageSMPProcessingTimeInMainLoop, m_2ndStepAverageProcessingTime, 100. * m_2ndStepAverageProcessingTime / totalSMPTime);
 		}
 		else
 			m_tasks.wait();
@@ -363,13 +359,13 @@ namespace hdt
 		}
 	}
 
-	EventResult SkyrimPhysicsWorld::ReceiveEvent(SKSECameraEvent* evn, EventDispatcher<SKSECameraEvent>* dispatcher)
+	RE::BSEventNotifyControl SkyrimPhysicsWorld::ProcessEvent(const SKSE::CameraEvent* a_event, RE::BSTEventSource<SKSE::CameraEvent>* a_eventSource)
 	{
-		if (evn && evn->oldState && evn->newState)
-			if (evn->oldState->stateId == 0 && evn->newState->stateId == 9)
+		if (a_event && a_event->oldState && a_event->newState)
+			if (a_event->oldState->id == RE::CameraState::kFirstPerson && a_event->newState->id == RE::CameraState::kThirdPerson)
 			{
 				m_resetPc = 3;
 			}
-		return kEvent_Continue;
+		return RE::BSEventNotifyControl::kContinue;
 	}
 }

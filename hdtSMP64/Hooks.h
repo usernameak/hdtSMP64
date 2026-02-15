@@ -1,7 +1,5 @@
 #pragma once
 
-#include "skse64_common/Relocation.h"
-
 #define DEFINE_MEMBER_FN_LONG_HOOK(className, functionName, retnType, address, ...)		\
 	typedef retnType (className::* _##functionName##_type)(__VA_ARGS__);			\
 	static inline uintptr_t* _##functionName##_GetPtrAddr(void)						\

@@ -1,5 +1,4 @@
 #pragma once
-#include "skse64/PluginAPI.h"
 
 #include "EventDispatcherImpl.h"
 #include "PluginAPI.h"
@@ -28,15 +27,14 @@ namespace hdt
 		void onPreStep(const PreStepEvent& e) { m_preStepDispatcher.dispatch(e); }
 		void onPostStep(const PostStepEvent& e) { m_postStepDispatcher.dispatch(e); }
 
-		void init(const SKSEInterface* skse);
+		void init(const SKSE::LoadInterface* skse);
 
 	private:
 		VersionInfo m_versionInfo{ INTERFACE_VERSION, BULLET_VERSION };
 		EventDispatcherImpl<PreStepEvent> m_preStepDispatcher;
 		EventDispatcherImpl<PostStepEvent> m_postStepDispatcher;
 
-		PluginHandle m_sksePluginHandle;
-		SKSEMessagingInterface* m_skseMessagingInterface;
+		const SKSE::MessagingInterface *m_skseMessagingInterface;
 	};
 
 	extern PluginInterfaceImpl g_pluginInterface;

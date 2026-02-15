@@ -8,6 +8,8 @@
 #include <intrin.h>
 #include <cassert>
 
+#include <windows.h>
+
 #define FLT_DIG         6                       /* # of decimal digits of precision */
 #define FLT_EPSILON     1.192092896e-07F        /* smallest such that 1.0+FLT_EPSILON != 1.0 */
 #define FLT_GUARD       0
@@ -397,11 +399,14 @@ namespace hdt
 		std::atomic_long m_refCount;
 	};
 
-	namespace ref
-	{
-		inline void retain(RefObject* o) { o->retain(); }
-		inline void release(RefObject* o) { o->release(); }
-	}
+	template <typename T>
+	struct RefImpl;
+
+	template <std::derived_from<RefObject> T>
+	struct RefImpl<T> {
+		inline static void retain(RefObject* o) { o->retain(); }
+		inline static void release(RefObject* o) { o->release(); }
+	};
 
 	template <>
 	inline btVector3 abs(btVector3 rhs) { return _mm_andnot_ps(_mm_set_ps1(-0.f), rhs.get128()); }
@@ -418,7 +423,7 @@ namespace hdt
 			while (m_flag.test_and_set(std::memory_order_acquire))
 			{
 				if (++count > 10000)
-					SwitchToThread();
+					::SwitchToThread();
 			}
 		}
 

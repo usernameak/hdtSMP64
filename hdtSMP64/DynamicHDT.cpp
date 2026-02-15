@@ -2,17 +2,17 @@
 #include "hdtSkyrimSystem.h"
 #include "hdtSkinnedMesh/hdtSkinnedMeshSystem.h"
 
-UInt32 hdt::util::splitArmorAddonFormID(std::string nodeName)
+uint32_t hdt::util::splitArmorAddonFormID(const RE::BSFixedString &nodeName)
 {
-	try {
-		return std::stoul(nodeName.substr(1, 8), nullptr, 16);
-	}
-	catch (...) {
+	std::string_view sub = std::string_view(nodeName).substr(1, 8);
+	uint32_t armorAddon = 0;
+	auto result = std::from_chars(sub.data(), sub.data() + sub.size(), armorAddon, 16);
+	if (result.ec != std::errc{} && result.ptr != sub.data() + sub.size())
 		return 0;
-	}
+	return armorAddon;
 }
 
-std::string hdt::util::UInt32toString(UInt32 formID)
+std::string hdt::util::UInt32toString(uint32_t formID)
 {
 	char buffer[16];
 	sprintf_s(buffer, "%08X", formID);

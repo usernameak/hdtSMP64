@@ -1,0 +1,6 @@
+[submodule "commonlibsse"]
+	path = lib/commonlibsse
+	url = https://github.com/libxse/commonlibsse.git
+[submodule "lib/bullet3"]
+	path = lib/bullet3
+	url = https://github.com/bulletphysics/bullet3

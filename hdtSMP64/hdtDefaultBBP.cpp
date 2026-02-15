@@ -16,13 +16,12 @@ namespace hdt
 		return &s;
 	}
 
-	DefaultBBP::PhysicsFile DefaultBBP::scanBBP(NiNode* scan)
+	DefaultBBP::PhysicsFile DefaultBBP::scanBBP(RE::NiNode* scan)
 	{
-		for (int i = 0; i < scan->m_extraDataLen; ++i)
+		auto* stringData = scan->GetExtraData<RE::NiStringExtraData>("HDT Skinned Mesh Physics Object");
+		if (stringData)
 		{
-			auto stringData = ni_cast(scan->m_extraData[i], NiStringExtraData);
-			if (stringData && !strcmp(stringData->m_pcName, "HDT Skinned Mesh Physics Object") && stringData->m_pString)
-				return { stringData->m_pString, defaultNameMap(scan) };
+			return { stringData->value, defaultNameMap(scan) };
 		}
 
 		return scanDefaultBBP(scan);
@@ -67,7 +66,7 @@ namespace hdt
 					}
 					catch (...)
 					{
-						_WARNING("defaultBBP(%d,%d) : invalid map", reader.GetRow(), reader.GetColumn());
+						spdlog::warn("defaultBBP({},{}) : invalid map", reader.GetRow(), reader.GetColumn());
 					}
 					reader.skipCurrentElement();
 				}
@@ -97,7 +96,7 @@ namespace hdt
 							}
 							else
 							{
-								_WARNING("defaultBBP(%d,%d) : unknown element", reader.GetRow(), reader.GetColumn());
+								spdlog::warn("defaultBBP({},{}) : unknown element", reader.GetRow(), reader.GetColumn());
 								reader.skipCurrentElement();
 							}
 						}
@@ -110,7 +109,7 @@ namespace hdt
 				}
 				else
 				{
-					_WARNING("defaultBBP(%d,%d) : unknown element", reader.GetRow(), reader.GetColumn());
+					spdlog::warn("defaultBBP({},{}) : unknown element", reader.GetRow(), reader.GetColumn());
 					reader.skipCurrentElement();
 				}
 			}
@@ -122,7 +121,7 @@ namespace hdt
 		std::setlocale(LC_NUMERIC, saved_locale);
 	}
 
-	DefaultBBP::PhysicsFile DefaultBBP::scanDefaultBBP(NiNode* armor)
+	DefaultBBP::PhysicsFile DefaultBBP::scanDefaultBBP(RE::NiNode* armor)
 	{
 		static std::mutex s_lock;
 		std::lock_guard<std::mutex> l(s_lock);
@@ -136,9 +135,9 @@ namespace hdt
 		return { it == bbpFileList.end() ? "" : it->second, remappedNames };
 	}
 
-	DefaultBBP::NameMap DefaultBBP::getNameMap(NiNode* armor)
+	DefaultBBP::NameMap DefaultBBP::getNameMap(RE::NiNode* armor)
 	{
-		auto nameMap = defaultNameMap(armor);
+		DefaultBBP::NameMap nameMap = defaultNameMap(armor);
 
 		for (auto remap : remaps)
 		{
@@ -158,7 +157,7 @@ namespace hdt
 					{ return e.first != start->first; });
 				if (start != remap.entries.rend())
 				{
-					auto& s = nameMap.insert({ remap.name, { } }).first;
+					const auto &s = nameMap.insert({ remap.name, { } }).first;
 					std::for_each(start, end, [&](const RemapEntry& e)
 						{
 							auto it = nameMap.find(e.second);
@@ -176,27 +175,25 @@ namespace hdt
 		return nameMap;
 	}
 
-	DefaultBBP::NameMap DefaultBBP::defaultNameMap(NiNode* armor)
+	DefaultBBP::NameMap DefaultBBP::defaultNameMap(RE::NiNode* armor)
 	{
 		std::unordered_map<std::string, std::unordered_set<std::string> > nameMap;
 		// This case never happens to a lurker skeleton, thus we don't need to test.
 		auto skinned = findNode(armor, "BSFaceGenNiNodeSkinned");
 		if (skinned)
 		{
-			for (int i = 0; i < skinned->m_children.m_arrayBufLen; ++i)
+			for (auto& child : skinned->children)
 			{
-				if (!skinned->m_children.m_data[i]) continue;
-				auto tri = skinned->m_children.m_data[i]->GetAsBSTriShape();
-				if (!tri || !tri->m_name) continue;
-				nameMap.insert({ tri->m_name, {tri->m_name} });
+				auto tri = child->AsTriShape();
+				if (!tri || tri->name.empty()) continue;
+				nameMap.insert({ tri->name.c_str(), {tri->name.c_str()}});
 			}
 		}
-		for (int i = 0; i < armor->m_children.m_arrayBufLen; ++i)
+		for (auto& child : armor->children)
 		{
-			if (!armor->m_children.m_data[i]) continue;
-			auto tri = armor->m_children.m_data[i]->GetAsBSTriShape();
-			if (!tri || !tri->m_name) continue;
-			nameMap.insert({ tri->m_name, {tri->m_name} });
+			auto tri = child->AsTriShape();
+			if (!tri || tri->name.empty()) continue;
+			nameMap.insert({ tri->name.c_str(), {tri->name.c_str()} });
 		}
 		return nameMap;
 	}

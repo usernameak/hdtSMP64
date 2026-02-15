@@ -6,8 +6,8 @@ namespace hdt
 {
 	SkinnedMeshShape::SkinnedMeshShape(SkinnedMeshBody* body)
 	{
-		m_owner = body;
-		m_owner->m_shape = this;
+		userData = body;
+		userData->m_shape = this;
 	}
 
 	SkinnedMeshShape::~SkinnedMeshShape()
@@ -18,14 +18,14 @@ namespace hdt
 
 	void SkinnedMeshShape::clipColliders()
 	{
-		auto& v = m_owner->m_vertices;
+		auto& v = userData->m_vertices;
 		m_tree.clipCollider([&, this](const Collider& n)-> bool
 		{
 			bool flg = false;
 			for (int i = 0; i < getBonePerCollider() && !flg; ++i)
 			{
 				float weight = getColliderBoneWeight(&n, i);
-				if (weight > FLT_EPSILON && weight > m_owner->m_skinnedBones[getColliderBoneIndex(&n, i)].
+				if (weight > FLT_EPSILON && weight > userData->m_skinnedBones[getColliderBoneIndex(&n, i)].
 					weightThreshold)
 					flg = true;
 			}
@@ -70,7 +70,7 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 		}
 
 		m_kernel.lock();
-		m_kernel.setArg(0, m_owner->m_vposCL);
+		m_kernel.setArg(0, userData->m_vposCL);
 		m_kernel.setArg(1, m_colliderCL);
 		m_kernel.setArg(2, m_aabbCL);
 		m_kernel.setArg(3, m_shapeProp.margin);
@@ -141,7 +141,7 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 		}
 
 		m_kernel.lock();
-		m_kernel.setArg(0, m_owner->m_vposCL);
+		m_kernel.setArg(0, userData->m_vposCL);
 		m_kernel.setArg(1, m_colliderCL);
 		m_kernel.setArg(2, m_aabbCL);
 		m_kernel.setArg(3, m_shapeProp.penetration);
@@ -182,10 +182,10 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 		m_tree.optimize();
 		m_tree.updateKinematic([this](const Collider* n)
 		{
-			return m_owner->flexible(m_owner->m_vertices[n->vertex]);
+			return userData->flexible(userData->m_vertices[n->vertex]);
 		});
 
-		m_owner->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
+		userData->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
 
 		m_tree.exportColliders(m_colliders);
 #ifdef CUDA
@@ -200,9 +200,9 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 	void PerVertexShape::internalUpdate()
 	{
 #ifdef CUDA
-		auto vertices = m_owner->m_vpos.get();
+		auto vertices = userData->m_vpos.get();
 #else
-		auto& vertices = m_owner->m_vpos;
+		auto& vertices = userData->m_vpos;
 #endif // CUDA
 
 		size_t size = m_colliders.size();
@@ -222,13 +222,13 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 	{
 		m_tree.children.clear();
 		std::vector<U32> keys;
-		for (U32 i = 0; i < m_owner->m_vertices.size(); ++i)
+		for (U32 i = 0; i < userData->m_vertices.size(); ++i)
 		{
 			keys.clear();
 			for (int j = 0; j < 4; ++j)
 			{
-				if (m_owner->m_vertices[i].m_weight[j] > FLT_EPSILON)
-					keys.push_back(m_owner->m_vertices[i].getBoneIdx(j));
+				if (userData->m_vertices[i].m_weight[j] > FLT_EPSILON)
+					keys.push_back(userData->m_vertices[i].getBoneIdx(j));
 			}
 			m_tree.insertCollider(keys, Collider(i));
 		}
@@ -271,9 +271,9 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 	void PerTriangleShape::internalUpdate()
 	{
 #ifdef CUDA
-		auto vertices = m_owner->m_vpos.get();
+		auto vertices = userData->m_vpos.get();
 #else
-		auto& vertices = m_owner->m_vpos;
+		auto& vertices = userData->m_vpos;
 #endif // CUDA
 
 		size_t size = m_colliders.size();
@@ -306,13 +306,13 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 		m_tree.optimize();
 		m_tree.updateKinematic([=](const Collider* c)
 		{
-			float k = m_owner->flexible(m_owner->m_vertices[c->vertices[0]]);
-			k += m_owner->flexible(m_owner->m_vertices[c->vertices[1]]);
-			k += m_owner->flexible(m_owner->m_vertices[c->vertices[2]]);
+			float k = userData->flexible(userData->m_vertices[c->vertices[0]]);
+			k += userData->flexible(userData->m_vertices[c->vertices[1]]);
+			k += userData->flexible(userData->m_vertices[c->vertices[2]]);
 			return k / 3;
 		});
 
-		m_owner->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
+		userData->setCollisionFlags(m_tree.isKinematic ? btCollisionObject::CF_KINEMATIC_OBJECT : 0);
 
 		m_tree.exportColliders(m_colliders);
 #ifdef CUDA
@@ -325,9 +325,9 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 
 
 		Ref<PerTriangleShape> holder = this;
-		m_verticesCollision = new PerVertexShape(m_owner);
+		m_verticesCollision = new PerVertexShape(userData);
 		m_verticesCollision->m_shapeProp.margin = m_shapeProp.margin;
-		m_owner->m_shape = this;
+		userData->m_shape = this;
 
 		m_verticesCollision->autoGen();
 		m_verticesCollision->clipColliders();
@@ -360,9 +360,9 @@ __kernel void updateCollider(__global float4* vertices, __global uint4* collider
 
 	void PerTriangleShape::addTriangle(int a, int b, int c)
 	{
-		assert(a < m_owner->m_vertices.size());
-		assert(b < m_owner->m_vertices.size());
-		assert(c < m_owner->m_vertices.size());
+		assert(a < userData->m_vertices.size());
+		assert(b < userData->m_vertices.size());
+		assert(c < userData->m_vertices.size());
 		Collider collider(a, b, c);
 		std::vector<U32> keys;
 		std::vector<float> w;

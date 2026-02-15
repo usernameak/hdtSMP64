@@ -11,7 +11,7 @@ OverrideManager* hdt::Override::OverrideManager::GetSingleton()
 }
 
 bool checkPapyrusExtension() {
-	std::ofstream ifs("Data/Scripts/DynamicHDT.pex", std::ios::in | std::ios::_Nocreate);
+	std::ifstream ifs("Data/Scripts/DynamicHDT.pex", std::ios::in | std::ios::_Nocreate);
 	if (!ifs || !ifs.is_open()) {
 		g_hasPapyrusExtension = false;
 		return false;
@@ -36,7 +36,7 @@ std::string hdt::Override::OverrideManager::queryOverrideData()
 	return console_print;
 }
 
-bool hdt::Override::OverrideManager::registerOverride(UInt32 actor_formID, std::string old_file_path, std::string new_file_path)
+bool hdt::Override::OverrideManager::registerOverride(uint32_t actor_formID, std::string old_file_path, std::string new_file_path)
 {
 	if (old_file_path.empty())return false;
 	for (auto& e : m_ActorPhysicsFileSwapList[actor_formID]) {
@@ -48,7 +48,7 @@ bool hdt::Override::OverrideManager::registerOverride(UInt32 actor_formID, std::
 	return true;
 }
 
-std::string hdt::Override::OverrideManager::checkOverride(UInt32 actor_formID, std::string old_file_path)
+std::string hdt::Override::OverrideManager::checkOverride(uint32_t actor_formID, std::string old_file_path)
 {
 	auto iter1 = m_ActorPhysicsFileSwapList.find(actor_formID);
 	if (iter1 != m_ActorPhysicsFileSwapList.end()) {
@@ -84,7 +84,7 @@ void hdt::Override::OverrideManager::Deserialize(std::stringstream& data_stream)
 	m_ActorPhysicsFileSwapList.clear();
 	try {
 		while (!data_stream.eof()) {
-			UInt32 actor_formID, override_size = 0;
+			uint32_t actor_formID, override_size = 0;
 			data_stream >> std::hex >> actor_formID >> override_size;
 			for (int i = 0; i < override_size; ++i) {
 				std::string orig_physics_file, override_physics_file;
@@ -95,10 +95,8 @@ void hdt::Override::OverrideManager::Deserialize(std::stringstream& data_stream)
 		}
 	}
 	catch (std::exception& e) {
-
-		Console_Print("[DynamicHDT] ERROR! -- Failed parsing override data.");
-
-		Console_Print("[DynamicHDT] Error(): %s\nWhat():\n\t%s", typeid(e).name(), e.what());
+		RE::ConsoleLog::GetSingleton()->Print("[DynamicHDT] ERROR! -- Failed parsing override data.");
+		RE::ConsoleLog::GetSingleton()->Print("[DynamicHDT] Error(): %s\nWhat():\n\t%s", typeid(e).name(), e.what());
 
 		return;
 	}

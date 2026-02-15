@@ -1,7 +1,5 @@
 #pragma once
 
-#include "skse64/GameEvents.h"
-
 #include "HookEvents.h"
 #include "IEventListener.h"
 
@@ -9,14 +7,14 @@ namespace hdt
 {
 	class EventDebugLogger
 		: public IEventListener<ArmorAttachEvent>
-		  , public BSTEventSink<TESCellAttachDetachEvent>
-		  , public BSTEventSink<TESMoveAttachDetachEvent>
+		, public RE::BSTEventSink<RE::TESCellAttachDetachEvent>
+		, public RE::BSTEventSink<RE::TESMoveAttachDetachEvent>
 	{
 	protected:
-		EventResult ReceiveEvent(TESCellAttachDetachEvent* evn,
-		                         EventDispatcher<TESCellAttachDetachEvent>* dispatcher) override;
-		EventResult ReceiveEvent(TESMoveAttachDetachEvent* evn,
-		                         EventDispatcher<TESMoveAttachDetachEvent>* dispatcher) override;
+		RE::BSEventNotifyControl ProcessEvent(const RE::TESCellAttachDetachEvent* evn,
+			RE::BSTEventSource<RE::TESCellAttachDetachEvent>* dispatcher) override;
+		RE::BSEventNotifyControl ProcessEvent(const RE::TESMoveAttachDetachEvent* evn,
+			RE::BSTEventSource<RE::TESMoveAttachDetachEvent>* dispatcher) override;
 
 		void onEvent(const ArmorAttachEvent&) override;
 	};

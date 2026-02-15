@@ -1,38 +1,34 @@
 #pragma once
 
-#include "skse64/NiObjects.h"
-#include "skse64/GameReferences.h"
-
 #include "EventDispatcherImpl.h"
-#include "skse64/NiNodes.h"
 
 namespace hdt
 {
 	struct SkinAllHeadGeometryEvent
 	{
-		NiNode* skeleton = nullptr;
-		BSFaceGenNiNode* headNode = nullptr;
+		RE::NiNode* skeleton = nullptr;
+		RE::BSFaceGenNiNode* headNode = nullptr;
 		bool hasSkinned = false;
 	};
 
 	struct SkinSingleHeadGeometryEvent
 	{
-		NiNode* skeleton = nullptr;
-		BSFaceGenNiNode* headNode = nullptr;
-		BSGeometry* geometry = nullptr;
+		RE::NiNode* skeleton = nullptr;
+		RE::BSFaceGenNiNode* headNode = nullptr;
+		RE::BSGeometry* geometry = nullptr;
 	};
 
 	struct ArmorAttachEvent
 	{
-		NiNode* armorModel = nullptr;
-		NiNode* skeleton = nullptr;
-		NiAVObject* attachedNode = nullptr;
+		RE::NiNode* armorModel = nullptr;
+		RE::NiNode* skeleton = nullptr;
+		RE::NiAVObject* attachedNode = nullptr;
 		bool hasAttached = false;
 	};
 
 	struct ArmorDetachEvent
 	{
-		Actor* actor = nullptr;
+		RE::Actor* actor = nullptr;
 		bool hasDetached = false;
 	};
 

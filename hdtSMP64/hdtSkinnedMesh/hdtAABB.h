@@ -1,10 +1,7 @@
 #pragma once
 
 #include "hdtBulletHelper.h"
-#include <amp.h>
-#include <amp_graphics.h>
-#include <amp_math.h>
-#include <amp_short_vectors.h>
+#include <xmmintrin.h>
 
 namespace hdt
 {
@@ -97,9 +94,8 @@ namespace hdt
 		}
 
 		BoundingSphere(const btVector3& center, float radius)
-			: m_centerRadius(center)
+			: m_centerRadius(center.x(), center.y(), center.z(), radius)
 		{
-			m_centerRadius[3] = radius;
 		}
 
 		bool isCollide(const BoundingSphere& rhs) const

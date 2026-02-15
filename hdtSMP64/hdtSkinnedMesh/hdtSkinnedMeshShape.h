@@ -40,7 +40,7 @@ namespace hdt
 		virtual float baryWeight(const btVector3 & w, int boneIdx) = 0;
 #endif // !CUDA
 
-		SkinnedMeshBody* m_owner;
+		SkinnedMeshBody* userData;
 #ifdef CUDA
 		std::shared_ptr<Aabb[]> m_aabb;
 #else
@@ -75,12 +75,12 @@ namespace hdt
 
 		float getColliderBoneWeight(const Collider* c, int boneIdx) override
 		{
-			return m_owner->m_vertices[c->vertex].m_weight[boneIdx];
+			return userData->m_vertices[c->vertex].m_weight[boneIdx];
 		}
 
 		int getColliderBoneIndex(const Collider* c, int boneIdx) override
 		{
-			return m_owner->m_vertices[c->vertex].getBoneIdx(boneIdx);
+			return userData->m_vertices[c->vertex].getBoneIdx(boneIdx);
 		}
 
 #ifndef CUDA
@@ -127,21 +127,21 @@ namespace hdt
 
 		float getColliderBoneWeight(const Collider* c, int boneIdx) override
 		{
-			return m_owner->m_vertices[c->vertices[boneIdx / 4]].m_weight[boneIdx % 4];
+			return userData->m_vertices[c->vertices[boneIdx / 4]].m_weight[boneIdx % 4];
 		}
 
 		int getColliderBoneIndex(const Collider* c, int boneIdx) override
 		{
-			return m_owner->m_vertices[c->vertices[boneIdx / 4]].getBoneIdx(boneIdx % 4);
+			return userData->m_vertices[c->vertices[boneIdx / 4]].getBoneIdx(boneIdx % 4);
 		}
 
 #ifndef CUDA
 		btVector3 baryCoord(const Collider* c, const btVector3& p) override
 		{
 			return BaryCoord(
-				m_owner->m_vpos[c->vertices[0]].pos(),
-				m_owner->m_vpos[c->vertices[1]].pos(),
-				m_owner->m_vpos[c->vertices[2]].pos(),
+				userData->m_vpos[c->vertices[0]].pos(),
+				userData->m_vpos[c->vertices[1]].pos(),
+				userData->m_vpos[c->vertices[2]].pos(),
 				p);
 		}
 		float baryWeight(const btVector3 & w, int boneIdx) override { return w[boneIdx / 4]; }

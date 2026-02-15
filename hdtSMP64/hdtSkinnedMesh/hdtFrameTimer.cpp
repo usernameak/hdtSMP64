@@ -1,7 +1,5 @@
 #include "hdtFrameTimer.h"
 
-#include "skse64/GameAPI.h"
-
 namespace hdt
 {
 	FrameTimer* FrameTimer::instance()
@@ -69,48 +67,48 @@ namespace hdt
 
 			if (--m_nFrames == 0)
 			{
-				Console_Print("Timings over %d frames:", m_count);
-				Console_Print("  CPU:");
+				RE::ConsoleLog::GetSingleton()->Print("Timings over %d frames:", m_count);
+				RE::ConsoleLog::GetSingleton()->Print("  CPU:");
 				float mean = m_sumsCPU[e_InternalUpdate] / m_count;
-				Console_Print("    Internal update mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Internal update mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredCPU[e_InternalUpdate] / m_count - mean * mean));
 				mean = m_sumsCPU[e_CollisionLaunch] / m_count;
-				Console_Print("    Collision launch mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision launch mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredCPU[e_CollisionLaunch] / m_count - mean * mean));
 				mean = m_sumsCPU[e_CollisionProcess] / m_count;
-				Console_Print("    Collision process mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision process mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredCPU[e_CollisionProcess] / m_count - mean * mean));
 				mean = m_sumsCPU[e_Total] / m_count;
-				Console_Print("    Total mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Total mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredCPU[e_Total] / m_count - mean * mean));
 				mean = m_nManifoldsCPU / m_count;
-				Console_Print("    Collision manifolds %f, std %f",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision manifolds %f, std %f",
 					mean,
 					sqrt(m_nManifolds2CPU / m_count - mean * mean));
 
-				Console_Print("  GPU:");
+				RE::ConsoleLog::GetSingleton()->Print("  GPU:");
 				mean = m_sumsGPU[e_InternalUpdate] / m_count;
-				Console_Print("    Internal update mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Internal update mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredGPU[e_InternalUpdate] / m_count - mean * mean));
 				mean = m_sumsGPU[e_CollisionLaunch] / m_count;
-				Console_Print("    Collision launch mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision launch mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredGPU[e_CollisionLaunch] / m_count - mean * mean));
 				mean = m_sumsGPU[e_CollisionProcess] / m_count;
-				Console_Print("    Collision process mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision process mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredGPU[e_CollisionProcess] / m_count - mean * mean));
 				mean = m_sumsGPU[e_Total] / m_count;
-				Console_Print("    Total mean %f us, std %f us",
+				RE::ConsoleLog::GetSingleton()->Print("    Total mean %f us, std %f us",
 					mean,
 					sqrt(m_sumsSquaredGPU[e_Total] / m_count - mean * mean));
 				mean = m_nManifoldsGPU / m_count;
-				Console_Print("    Collision manifolds %f, std %f",
+				RE::ConsoleLog::GetSingleton()->Print("    Collision manifolds %f, std %f",
 					mean,
 					sqrt(m_nManifolds2GPU / m_count - mean * mean));
 			}

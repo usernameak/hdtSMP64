@@ -3,7 +3,7 @@
 #include <string>
 #include <unordered_set>
 
-#include "..\hdtSSEUtils\FrameworkUtils.h"
+#include "../hdtSSEUtils/FrameworkUtils.h"
 
 namespace hdt {
 	class ForceUpdateList {

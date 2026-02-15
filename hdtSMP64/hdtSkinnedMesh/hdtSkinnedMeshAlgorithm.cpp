@@ -41,11 +41,11 @@ namespace hdt
 #endif
 		{
 #ifdef CUDA
-			v0 = a->m_owner->m_vpos.get();
-			v1 = b->m_owner->m_vpos.get();
+			v0 = a->userData->m_vpos.get();
+			v1 = b->userData->m_vpos.get();
 #else
-			v0 = a->m_owner->m_vpos.data();
-			v1 = b->m_owner->m_vpos.data();
+			v0 = a->userData->m_vpos.data();
+			v1 = b->userData->m_vpos.data();
 #endif
 			c0 = &a->m_tree;
 			c1 = &b->m_tree;
@@ -80,17 +80,14 @@ namespace hdt
 	template <typename T>
 	struct CollisionCheckBase2<T, false> : public CollisionCheckBase1<T>
 	{
-		template <typename... Ts>
-		CollisionCheckBase2(Ts&&... ts)
-			: CollisionCheckBase1(std::forward<Ts>(ts)...)
-		{}
+		using CollisionCheckBase1<T>::CollisionCheckBase1;
 
 		bool addResult(const CollisionResult& res)
 		{
-			int p = numResults.fetch_add(1);
+			int p = this->numResults.fetch_add(1);
 			if (p < SkinnedMeshAlgorithm::MaxCollisionCount)
 			{
-				results[p] = res;
+				this->results[p] = res;
 				return true;
 			}
 			return false;
@@ -100,22 +97,19 @@ namespace hdt
 	template <typename T>
 	struct CollisionCheckBase2<T, true> : public CollisionCheckBase1<T>
 	{
-		template <typename... Ts>
-		CollisionCheckBase2(Ts&&... ts)
-			: CollisionCheckBase1(std::forward<Ts>(ts)...)
-		{}
+		using CollisionCheckBase1<T>::CollisionCheckBase1;
 
 		bool addResult(const CollisionResult& res)
 		{
-			int p = numResults.fetch_add(1);
+			int p = this->numResults.fetch_add(1);
 			if (p < SkinnedMeshAlgorithm::MaxCollisionCount)
 			{
-				results[p].posA = res.posB;
-				results[p].posB = res.posA;
-				results[p].colliderA = res.colliderB;
-				results[p].colliderB = res.colliderA;
-				results[p].normOnB = -res.normOnB;
-				results[p].depth = res.depth;
+				this->results[p].posA = res.posB;
+				this->results[p].posB = res.posA;
+				this->results[p].colliderA = res.colliderB;
+				this->results[p].colliderB = res.colliderA;
+				this->results[p].normOnB = -res.normOnB;
+				this->results[p].depth = res.depth;
 				return true;
 			}
 			return false;
@@ -131,16 +125,14 @@ namespace hdt
 	template <bool SwapResults>
 	struct CollisionChecker<PerVertexShape, SwapResults> : public CollisionCheckBase2<PerVertexShape, SwapResults>
 	{
-		template <typename... Ts>
-		CollisionChecker(Ts&&... ts)
-			: CollisionCheckBase2(std::forward<Ts>(ts)...)
-		{}
+		using CollisionCheckBase2<PerVertexShape, SwapResults>::CollisionCheckBase2;
+
 		bool checkCollide(Collider* a, Collider* b, CollisionResult& res)
 		{
-			auto s0 = v0[a->vertex];
-			auto r0 = s0.marginMultiplier() * sp0->margin;
-			auto s1 = v1[b->vertex];
-			auto r1 = s1.marginMultiplier() * sp1->margin;
+			auto s0 = this->v0[a->vertex];
+			auto r0 = s0.marginMultiplier() * this->sp0->margin;
+			auto s1 = this->v1[b->vertex];
+			auto r1 = s1.marginMultiplier() * this->sp1->margin;
 
 			auto ret = checkSphereSphere(s0.pos(), s1.pos(), r0, r1, res);
 			res.colliderA = a;
@@ -165,21 +157,18 @@ namespace hdt
 	template <bool SwapResults>
 	struct CollisionChecker<PerTriangleShape, SwapResults> : public CollisionCheckBase2<PerTriangleShape, SwapResults>
 	{
-		template <typename... Ts>
-		CollisionChecker(Ts&&... ts)
-			: CollisionCheckBase2(std::forward<Ts>(ts)...)
-		{}
+		using CollisionCheckBase2<PerTriangleShape, SwapResults>::CollisionCheckBase2;
 
 		bool checkCollide(Collider* a, Collider* b, CollisionResult& res)
 		{
-			auto s = v0[a->vertex];
-			auto r = s.marginMultiplier() * sp0->margin;
-			auto p0 = v1[b->vertices[0]];
-			auto p1 = v1[b->vertices[1]];
-			auto p2 = v1[b->vertices[2]];
+			auto s = this->v0[a->vertex];
+			auto r = s.marginMultiplier() * this->sp0->margin;
+			auto p0 = this->v1[b->vertices[0]];
+			auto p1 = this->v1[b->vertices[1]];
+			auto p2 = this->v1[b->vertices[2]];
 			auto margin = (p0.marginMultiplier() + p1.marginMultiplier() + p2.marginMultiplier()) / 3;
-			auto penetration = sp1->penetration * margin;
-			margin *= sp1->margin;
+			auto penetration = this->sp1->penetration * margin;
+			margin *= this->sp1->margin;
 			if (penetration > -FLT_EPSILON && penetration < FLT_EPSILON)
 			{
 				penetration = 0;
@@ -321,10 +310,7 @@ namespace hdt
 	template <typename T, bool SwapResults, CollisionCheckAlgorithmType Algorithm>
 	struct CollisionCheckDispatcher : public CollisionChecker<T, SwapResults>
 	{
-		template <typename... Ts>
-		CollisionCheckDispatcher(Ts&&... ts)
-			: CollisionChecker(std::forward<Ts>(ts)...)
-		{}
+		using CollisionChecker<T, SwapResults>::CollisionChecker;
 
 		void dispatch(ColliderTree* a, ColliderTree* b, const std::vector<Aabb*>& listA, const std::vector<Aabb*>& listB)
 		{
@@ -343,7 +329,7 @@ namespace hdt
 					{
 						if (!i->collideWith(*j))
 							continue;
-						if (checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
+						if (this->checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
 						{
 							if (!hasResult || result.depth > temp.depth)
 							{
@@ -357,7 +343,7 @@ namespace hdt
 
 			if (hasResult)
 			{
-				addResult(result);
+				this->addResult(result);
 			}
 		}
 	};
@@ -376,23 +362,20 @@ namespace hdt
 	template <typename T, bool SwapResults = false, CollisionCheckAlgorithmType Algorithm = e_CPURefactored>
 	struct CollisionCheckAlgorithm : public CollisionCheckDispatcher<T, SwapResults, Algorithm>
 	{
-		template <typename... Ts>
-		CollisionCheckAlgorithm(Ts&&... ts)
-			: CollisionCheckDispatcher(std::forward<Ts>(ts)...)
-		{}
+		using CollisionCheckDispatcher<T, SwapResults, Algorithm>::CollisionCheckDispatcher;
 
 		int operator()()
 		{
 			static_assert(Algorithm != e_CPU, "Old CPU algorithm specialization missing");
 
 			std::vector<std::pair<ColliderTree*, ColliderTree*>> pairs;
-			pairs.reserve(c0->colliders.size() + c1->colliders.size());
-			c0->checkCollisionL(c1, pairs);
+			pairs.reserve(this->c0->colliders.size() + this->c1->colliders.size());
+			this->c0->checkCollisionL(this->c1, pairs);
 			if (pairs.empty()) return 0;
 
 			decltype(auto) func = [this](const std::pair<ColliderTree*, ColliderTree*>& pair)
 			{
-				if (numResults >= SkinnedMeshAlgorithm::MaxCollisionCount)
+				if (this->numResults >= SkinnedMeshAlgorithm::MaxCollisionCount)
 					return;
 
 				auto a = pair.first, b = pair.second;
@@ -446,7 +429,7 @@ namespace hdt
 				}
 
 				// Now go through both lists and do the real collision (if needed).
-				dispatch(a, b, listA, listB);
+				this->dispatch(a, b, listA, listB);
 
 				listA.clear();
 				listB.clear();
@@ -457,7 +440,7 @@ namespace hdt
 				concurrency::parallel_for_each(pairs.begin(), pairs.end(), func);
 			else for (auto& i : pairs) func(i);
 
-			return numResults;
+			return this->numResults;
 		}
 	};
 
@@ -465,21 +448,18 @@ namespace hdt
 	template <typename T, bool SwapResults>
 	struct CollisionCheckAlgorithm<T, SwapResults, e_CPU> : public CollisionChecker<T, SwapResults>
 	{
-		template <typename... Ts>
-		CollisionCheckAlgorithm(Ts&&... ts)
-			: CollisionChecker(std::forward<Ts>(ts)...)
-		{}
+		using CollisionChecker<T, SwapResults>::CollisionChecker;
 
 		int operator()()
 		{
 			std::vector<std::pair<ColliderTree*, ColliderTree*>> pairs;
-			pairs.reserve(c0->colliders.size() + c1->colliders.size());
-			c0->checkCollisionL(c1, pairs);
+			pairs.reserve(this->c0->colliders.size() + this->c1->colliders.size());
+			this->c0->checkCollisionL(this->c1, pairs);
 			if (pairs.empty()) return 0;
 
 			decltype(auto) func = [this](const std::pair<ColliderTree*, ColliderTree*>& pair)
 			{
-				if (numResults >= SkinnedMeshAlgorithm::MaxCollisionCount)
+				if (this->numResults >= SkinnedMeshAlgorithm::MaxCollisionCount)
 					return;
 
 				auto a = pair.first, b = pair.second;
@@ -516,7 +496,7 @@ namespace hdt
 						{
 							if (!i->collideWith(*j))
 								continue;
-							if (checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
+							if (this->checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
 							{
 								if (!hasResult || result.depth > temp.depth)
 								{
@@ -545,7 +525,7 @@ namespace hdt
 						{
 							if (!i->collideWith(*j))
 								continue;
-							if (checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
+							if (this->checkCollide(&a->cbuf[i - abeg], &b->cbuf[j - bbeg], temp))
 							{
 								if (!hasResult || result.depth > temp.depth)
 								{
@@ -560,7 +540,7 @@ namespace hdt
 
 				if (hasResult)
 				{
-					addResult(result);
+					this->addResult(result);
 				}
 			};
 
@@ -568,7 +548,7 @@ namespace hdt
 				concurrency::parallel_for_each(pairs.begin(), pairs.end(), func);
 			else for (auto& i : pairs) func(i);
 
-			return numResults;
+			return this->numResults;
 		}
 	};
 
@@ -606,15 +586,15 @@ namespace hdt
 			{
 				auto w0 = a->getColliderBoneWeight(res.colliderA, ib);
 				int boneIdx0 = a->getColliderBoneIndex(res.colliderA, ib);
-				if (w0 <= a->m_owner->m_skinnedBones[boneIdx0].weightThreshold) continue;
+				if (w0 <= a->userData->m_skinnedBones[boneIdx0].weightThreshold) continue;
 
 				for (int jb = 0; jb < b->getBonePerCollider(); ++jb)
 				{
 					auto w1 = b->getColliderBoneWeight(res.colliderB, jb);
 					int boneIdx1 = b->getColliderBoneIndex(res.colliderB, jb);
-					if (w1 <= b->m_owner->m_skinnedBones[boneIdx1].weightThreshold) continue;
+					if (w1 <= b->userData->m_skinnedBones[boneIdx1].weightThreshold) continue;
 
-					if (a->m_owner->m_skinnedBones[boneIdx0].isKinematic && b->m_owner->m_skinnedBones[boneIdx1].
+					if (a->userData->m_skinnedBones[boneIdx0].isKinematic && b->userData->m_skinnedBones[boneIdx1].
 						isKinematic)
 						continue;
 

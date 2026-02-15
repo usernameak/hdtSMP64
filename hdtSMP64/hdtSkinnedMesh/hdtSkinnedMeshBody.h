@@ -7,7 +7,7 @@
 
 #include <BulletCollision/Gimpact/btBoxCollision.h>
 
-#include <amp.h>
+#include <xmmintrin.h>
 
 namespace hdt
 {

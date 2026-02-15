@@ -1,14 +1,12 @@
+#include "pch.h"
 
 #include "WeatherManager.h"
 #include "ActorManager.h"
 #include "hdtSkyrimPhysicsWorld.h"
 #include "hdtDefaultBBP.h"
-#include "skse64/GameRTTI.h"
-#include "skse64/NiSerialization.h"
 #include <cinttypes>
 #include "Offsets.h"
-#include "skse64/GameStreams.h"
-#include "skse64/GameData.h"
+#include "SkyrimExtras.h"
 
 namespace hdt
 {
@@ -40,22 +38,22 @@ namespace hdt
 		return IDStr(buffer);
 	}
 
-	inline bool isFirstPersonSkeleton(NiNode* npc)
+	inline bool isFirstPersonSkeleton(RE::NiNode* npc)
 	{
 		if (!npc) return false;
 		return findNode(npc, "Camera1st [Cam1]") ? true : false;
 	}
 
-	NiNode* getNpcNode(NiNode* skeleton)
+	RE::NiNode* getNpcNode(RE::NiNode* skeleton)
 	{
 		// TODO: replace this with a generic skeleton fixing configuration option
 		// hardcode an exception for lurker skeletons because they are made incorrectly
 		auto shouldFix = false;
-		if (skeleton->m_owner && skeleton->m_owner->baseForm)
+		if (skeleton->userData && skeleton->userData->GetBaseObject())
 		{
-			auto npcForm = DYNAMIC_CAST(skeleton->m_owner->baseForm, TESForm, TESNPC);
-			if (npcForm && npcForm->race.race
-				&& !strcmp(npcForm->race.race->models[0].GetModelName(), "Actors\\DLC02\\BenthicLurker\\Character Assets\\skeleton.nif"))
+			RE::TESNPC *npcForm = skeleton->userData->GetBaseObject()->As<RE::TESNPC>();
+			if (npcForm && npcForm->race
+				&& !strcmp(npcForm->race->skeletonModels[0].GetModel(), "Actors\\DLC02\\BenthicLurker\\Character Assets\\skeleton.nif"))
 				shouldFix = true;
 		}
 		return findNode(skeleton, shouldFix ? "NPC Root [Root]" : "NPC");
@@ -73,30 +71,29 @@ namespace hdt
 					if (armor.mustFixNameMap)
 					{
 						if (armor.armorWorn)
-							if (armor.armorWorn->m_name)
+						{
+							std::string armorNewMeshName(armor.armorWorn->name);
+							if (!armorNewMeshName.empty() && armor.armorCurrentMeshName.compare(armorNewMeshName) != 0)
 							{
-								std::string armorNewMeshName(armor.armorWorn->m_name);
-								if (!armorNewMeshName.empty() && armor.armorCurrentMeshName.compare(armorNewMeshName) != 0)
-								{
-									auto& armorNameMap = armor.physicsFile.second;
-									hdt::DefaultBBP::NameMap tempNameMap;
-									for (auto& [setName, set] : armorNameMap)
-										// ... and we found the old mesh name in the armor nameMap,...
-										if (armor.armorCurrentMeshName.compare(setName) == 0)
-										{
-											// We add the new mesh name to the list of mesh names for the original mesh name (sic).
-											set.insert({ armorNewMeshName });
-											// We plan a new entry in the armor nameMap.
-											tempNameMap.insert({ armorNewMeshName, { armorNewMeshName } });
-											// This armor is fixed.
-											armor.mustFixNameMap = false;
-											armor.armorCurrentMeshName = armorNewMeshName;
-										}
-									// We add the planned entries.
-									for (auto& [setName, set] : tempNameMap)
-										armorNameMap.insert({ setName, set });
-								}
+								auto& armorNameMap = armor.physicsFile.second;
+								hdt::DefaultBBP::NameMap tempNameMap;
+								for (auto& [setName, set] : armorNameMap)
+									// ... and we found the old mesh name in the armor nameMap,...
+									if (armor.armorCurrentMeshName.compare(setName) == 0)
+									{
+										// We add the new mesh name to the list of mesh names for the original mesh name (sic).
+										set.insert({ armorNewMeshName });
+										// We plan a new entry in the armor nameMap.
+										tempNameMap.insert({ armorNewMeshName, { armorNewMeshName } });
+										// This armor is fixed.
+										armor.mustFixNameMap = false;
+										armor.armorCurrentMeshName = armorNewMeshName;
+									}
+								// We add the planned entries.
+								for (auto& [setName, set] : tempNameMap)
+									armorNameMap.insert({ setName, set });
 							}
+						}
 					}
 				}
 				skeleton.mustFixOneArmorMap = false;
@@ -120,9 +117,9 @@ namespace hdt
 		if (e.hasAttached)
 		{
 			// Check override data for current armoraddon
-			if (e.skeleton->m_owner)
+			if (e.skeleton->userData)
 			{
-				auto actor_formID = e.skeleton->m_owner->formID;
+				auto actor_formID = e.skeleton->userData->formID;
 				if (actor_formID) {
 					auto old_physics_file = skeleton.getArmors().back().physicsFile.first;
 					std::string physics_file_path_override = hdt::Override::OverrideManager::GetSingleton()->checkOverride(actor_formID, old_physics_file);
@@ -162,24 +159,42 @@ namespace hdt
 	// Then when checking which skeletons are active to calculate the frame,
 	// we only allow the activation of headparts that are on active heads.
 	// @param Actor * actor is expected not null.
-	void ActorManager::setHeadActiveIfNoHairArmor(Actor* actor, Skeleton* skeleton)
+	void ActorManager::setHeadActiveIfNoHairArmor(RE::Actor* actor, Skeleton* skeleton)
 	{
-		const int hairslot = 1 << 1;
-		const int longhairslot = 1 << 11;
-		auto worn = papyrusActor::GetWornForm(actor, hairslot | longhairslot);
+		bool worn = false;
+
+		auto *containerChanges = actor->extraList.GetByType<RE::ExtraContainerChanges>();
+		if (containerChanges && containerChanges->changes) {
+			for (RE::InventoryEntryData* entry : *containerChanges->changes->entryList) {
+				if (!entry->IsWorn())
+					continue;
+
+				auto *bip = entry->GetObject()->As<RE::BGSBipedObjectForm>();
+				if (!bip)
+					continue;
+
+				worn |= bip->bipedModelData.bipedObjectSlots.any(
+					RE::BIPED_MODEL::BipedObjectSlot::kHair, 
+					RE::BIPED_MODEL::BipedObjectSlot::kLongHair
+				);
+
+				if (worn)
+					break;
+			}
+		}
 
 		if (skeleton)
 			skeleton->head.isActive = !worn;
 	}
 
 	// @brief This happens on a closing RaceSex menu, and on 'smp reset'.
-	void ActorManager::onEvent(const MenuOpenCloseEvent&)
+	void ActorManager::onEvent(const RE::MenuOpenCloseEvent&)
 	{
 		// The ActorManager members are protected from parallel events by ActorManager.m_lock.
 		std::lock_guard<decltype(m_lock)> l(m_lock);
 		if (m_shutdown) return;
 
-		_DMESSAGE("Processing MenuOpenCloseEvent.");
+		spdlog::trace("Processing MenuOpenCloseEvent.");
 
 		fixArmorNameMaps();
 
@@ -201,18 +216,18 @@ namespace hdt
 	//NiAVObject* Actor::CalculateLOS_1405FD2C0(Actor *aActor, NiPoint3 *aTargetPosition, NiPoint3 *aRayHitPosition, float aViewCone)
 	//Used to ray cast from the actor. Will return nonNull if it hits something with position at aTargetPosition.
 	//Pass in 2pi to aViewCone to ignore LOS of actor.
-	typedef NiAVObject* (*_Actor_CalculateLOS)(Actor* aActor, NiPoint3* aTargetPosition, NiPoint3* aRayHitPosition, float aViewCone);
-	RelocAddr<_Actor_CalculateLOS> Actor_CalculateLOS(offset::Actor_CalculateLOS);
+	typedef RE::NiAVObject* (*_Actor_CalculateLOS)(RE::Actor* aActor, RE::NiPoint3* aTargetPosition, RE::NiPoint3* aRayHitPosition, float aViewCone);
+	REL::Relocation<_Actor_CalculateLOS> Actor_CalculateLOS(REL::ID(37770));
 
-	inline NiNode* ActorManager::getCameraNode()
+	inline RE::NiNode* ActorManager::getCameraNode()
 	{
 #ifdef SKYRIMVR
 		// Camera info taken from Shizof's cpbc under MIT. https://www.nexusmods.com/skyrimspecialedition/mods/21224?tab=files
-		if (!(*g_thePlayer)->loadedState)
+		if (!RE::PlayerCharacter::GetSingleton()->loadedData)
 			return nullptr;
-		return (*g_thePlayer)->loadedState->node;
+		return RE::PlayerCharacter::GetSingleton()->loadedData->data3D->AsNode();
 #else
-		return PlayerCamera::GetSingleton()->cameraNode;
+		return RE::PlayerCamera::GetSingleton()->cameraRoot.get();
 #endif
 	}
 
@@ -223,16 +238,16 @@ namespace hdt
 
 		// We get the player character and its cell.
 		// TODO Isn't there a more performing way to find the PC?? A singleton? And if it's the right way, why isn't it in utils functions?
-		auto& playerCharacter = std::find_if(m_skeletons.begin(), m_skeletons.end(), [](Skeleton& s) { return s.isPlayerCharacter(); });
-		auto playerCell = (playerCharacter != m_skeletons.end() && playerCharacter->skeleton->m_parent) ? playerCharacter->skeleton->m_parent->m_parent : nullptr;
+		const auto &playerCharacter = std::find_if(m_skeletons.begin(), m_skeletons.end(), [](Skeleton& s) { return s.isPlayerCharacter(); });
+		auto playerCell = (playerCharacter != m_skeletons.end() && playerCharacter->skeleton->parent) ? playerCharacter->skeleton->parent->parent : nullptr;
 
 		const auto cameraNode = getCameraNode();
 		if (!cameraNode)
 			return;
 		// We get the camera, its position and orientation.
-		const auto cameraTransform = cameraNode->m_worldTransform;
-		const auto cameraPosition = cameraTransform.pos;
-		const auto cameraOrientation = cameraTransform.rot * NiPoint3(0., 1., 0.); // The camera matrix is relative to the world.
+		const auto cameraTransform = cameraNode->world;
+		const auto cameraPosition = cameraTransform.translate;
+		const auto cameraOrientation = cameraTransform.rotate * RE::NiPoint3(0., 1., 0.); // The camera matrix is relative to the world.
 		this->m_cameraPositionDuringFrame = cameraPosition;
 
 		std::for_each(m_skeletons.begin(), m_skeletons.end(), [&](Skeleton& skel)
@@ -272,7 +287,7 @@ namespace hdt
 		activeSkeletons = 0;
 		for (auto& i : m_skeletons)
 		{
-			if (i.skeleton->m_uiRefCount == 1)
+			if (i.skeleton->GetRefCount() == 1)
 			{
 				i.clear();
 				i.skeleton = nullptr;
@@ -282,28 +297,28 @@ namespace hdt
 				//check wind obstructions
 				const auto world = SkyrimPhysicsWorld::get();
 				const auto wind = getWindDirection();
-				if (world->m_enableWind && wind && !(btFuzzyZero(hdt::magnitude(*wind)))) {
-					const auto owner = DYNAMIC_CAST(i.skeletonOwner.get(), TESForm, Actor);
+				if (world->m_enableWind && wind && !(btFuzzyZero(wind->Length()))) {
+					const auto owner = i.skeletonOwner.get()->As<RE::Actor>();
 					if (owner) {
 						auto windray = *wind * -1; // reverse wind raycast to find obstruction
-						NiPoint3 hitLocation;
+						RE::NiPoint3 hitLocation;
 						//Raycast for object in direction of wind
 						const auto object = Actor_CalculateLOS(owner, &windray, &hitLocation, 6.28);
 						if (object) { //object found
-							auto diff = (owner->pos - hitLocation);
+							auto diff = (owner->GetPosition() - hitLocation);
 							diff.z = 0;	//remove z component difference
-							const auto dist = hdt::magnitude(diff);
+							const auto dist = diff.Length();
 							// wind is a linear reduction, with a minimum floor since objects may have a minimum distance
 							// windfactor = 0 when dist <= m_distanceForNoWind, = 1 when dist >= m_distanceForMaxWind, and is linear with dist between these 2 values.
 							const auto windFactor = std::clamp((dist - world->m_distanceForNoWind) / (world->m_distanceForMaxWind - world->m_distanceForNoWind), 0.f, 1.f);
 							if (!btFuzzyZero(windFactor - i.getWindFactor())) {
-								_DMESSAGE("%s blocked by %s with distance %2.2g; setting windFactor %2.2g.", i.name(), object->m_name, dist, windFactor);
+								spdlog::trace("{} blocked by {} with distance {:2.2g}; setting windFactor {:2.2g}.", i.name(), object->name.c_str(), dist, windFactor);
 								i.updateWindFactor(windFactor);
 							}
 						}
 					}
 					else {
-						_DMESSAGE("%s is active skeleton, but failed to cast to Actor, no wind obstruction check possible.", i.name());
+						spdlog::trace("{} is active skeleton, but failed to cast to Actor, no wind obstruction check possible.", i.name());
 					}
 				}
 			}
@@ -337,7 +352,7 @@ namespace hdt
 			if (activeSkeletons > 0) {
 				averageTimePerSkeletonInMainLoop = averageProcessingTimeInMainLoop / activeSkeletons;
 			}
-			_VMESSAGE("msecs/activeSkeleton %2.2g activeSkeletons/maxActive/total %d/%d/%d processTimeInMainLoop/targetTime %2.2g/%2.2g", averageTimePerSkeletonInMainLoop, activeSkeletons, maxActiveSkeletons, m_skeletons.size(), averageProcessingTimeInMainLoop, target_time);
+			spdlog::debug("msecs/activeSkeleton {:2.2g} activeSkeletons/maxActive/total {}/{}/{} processTimeInMainLoop/targetTime {:2.2g}/{:2.2g}", averageTimePerSkeletonInMainLoop, activeSkeletons, maxActiveSkeletons, m_skeletons.size(), averageProcessingTimeInMainLoop, target_time);
 			if (m_autoAdjustMaxSkeletons) {
 				maxActiveSkeletons += target_time > averageProcessingTimeInMainLoop ? 2 : -2;
 				// clamp the value to the m_maxActiveSkeletons value
@@ -383,7 +398,7 @@ namespace hdt
 		{
 			if (headPartIter->origPartRootNode)
 			{
-				_DMESSAGE("Renaming nodes in original part %s back.", headPartIter->origPartRootNode->m_name);
+				spdlog::trace("Renaming nodes in original part {} back.", headPartIter->origPartRootNode->name.c_str());
 
 				for (auto& entry : skeleton.head.renameMap)
 				{
@@ -391,8 +406,8 @@ namespace hdt
 					auto node = findNode(headPartIter->origPartRootNode, entry.second->cstr());
 					if (node)
 					{
-						_DMESSAGE("Rename node %s -> %s.", entry.second->cstr(), entry.first->cstr());
-						setNiNodeName(node, entry.first->cstr());
+						spdlog::trace("Rename node {} -> {}.", entry.second->cstr(), entry.first->cstr());
+						node->name = entry.first->cstr();
 					}
 				}
 			}
@@ -416,8 +431,8 @@ namespace hdt
 
 		auto& skeleton = getSkeletonData(e.skeleton);
 		skeleton.npc = npc;
-		if (e.skeleton->m_owner)
-			skeleton.skeletonOwner = e.skeleton->m_owner;
+		if (e.skeleton->userData)
+			skeleton.skeletonOwner = RE::TESObjectREFRPtr(e.skeleton->userData);
 
 		if (e.hasSkinned)
 		{
@@ -425,7 +440,7 @@ namespace hdt
 			skeleton.head.isFullSkinning = false;
 			if (skeleton.head.npcFaceGeomNode)
 			{
-				_DMESSAGE("NPC face geometry no longer needed, clearing reference.");
+				spdlog::trace("NPC face geometry no longer needed, clearing reference.");
 				skeleton.head.npcFaceGeomNode = nullptr;
 			}
 		}
@@ -487,7 +502,7 @@ namespace hdt
 		return m_skeletons;
 	}
 
-	bool ActorManager::skeletonNeedsParts(NiNode* skeleton)
+	bool ActorManager::skeletonNeedsParts(RE::NiNode* skeleton)
 	{
 		return !isFirstPersonSkeleton(skeleton);
 		/*
@@ -502,7 +517,7 @@ namespace hdt
 		*/
 	}
 
-	ActorManager::Skeleton& ActorManager::getSkeletonData(NiNode* skeleton)
+	ActorManager::Skeleton& ActorManager::getSkeletonData(RE::NiNode* skeleton)
 	{
 		auto iter = std::find_if(m_skeletons.begin(), m_skeletons.end(), [=](Skeleton& i)
 			{
@@ -516,12 +531,12 @@ namespace hdt
 		{
 			auto ownerIter = std::find_if(m_skeletons.begin(), m_skeletons.end(), [=](Skeleton& i)
 				{
-					return !isFirstPersonSkeleton(i.skeleton) && i.skeletonOwner && skeleton->m_owner && i.skeletonOwner ==
-						skeleton->m_owner;
+					return !isFirstPersonSkeleton(i.skeleton) && i.skeletonOwner && skeleton->userData && i.skeletonOwner.get() ==
+						skeleton->userData;
 				});
 			if (ownerIter != m_skeletons.end())
 			{
-				_DMESSAGE("New skeleton found for formid %08x.", skeleton->m_owner->formID);
+				spdlog::trace("New skeleton found for formid {:08x}.", skeleton->userData->formID);
 				ownerIter->cleanHead(true);
 			}
 		}
@@ -530,26 +545,25 @@ namespace hdt
 		return m_skeletons.back();
 	}
 
-	ActorManager::Skeleton* ActorManager::get3rdPersonSkeleton(Actor* actor)
+	ActorManager::Skeleton* ActorManager::get3rdPersonSkeleton(RE::Actor* actor)
 	{
 		for (auto& i : m_skeletons)
 		{
-			const auto owner = DYNAMIC_CAST(i.skeletonOwner.get(), TESForm, Actor);
+			const auto owner = i.skeletonOwner->As<RE::Actor>();
 			if (actor == owner && i.skeleton && !isFirstPersonSkeleton(i.skeleton))
 				return &i;
 		}
 		return 0;
 	}
 
-	void ActorManager::Skeleton::doSkeletonMerge(NiNode* dst, NiNode* src, IString* prefix,
+	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix,
 		std::unordered_map<IDStr, IDStr>& map)
 	{
-		for (int i = 0; i < src->m_children.m_arrayBufLen; ++i)
-		{
-			auto srcChild = castNiNode(src->m_children.m_data[i]);
+		for (auto &srcChildAV : src->children) {
+			auto *srcChild = srcChildAV->AsNode();
 			if (!srcChild) continue;
 
-			if (!srcChild->m_name)
+			if (!srcChild->name.empty())
 			{
 				doSkeletonMerge(dst, srcChild, prefix, map);
 				continue;
@@ -557,14 +571,14 @@ namespace hdt
 
 			// FIXME: This was previously only in doHeadSkeletonMerge.
 			// But surely non-head skeletons wouldn't have this anyway?
-			if (!strcmp(srcChild->m_name, "BSFaceGenNiNodeSkinned"))
+			if (srcChild->name == "BSFaceGenNiNodeSkinned")
 			{
-				_DMESSAGE("Skipping facegen ninode in skeleton merge.");
+				spdlog::trace("Skipping facegen ninode in skeleton merge.");
 				continue;
 			}
 
 			// TODO check it's not a lurker skeleton
-			auto dstChild = findNode(dst, srcChild->m_name);
+			auto dstChild = findNode(dst, srcChild->name);
 			if (dstChild)
 			{
 				doSkeletonMerge(dstChild, srcChild, prefix, map);
@@ -576,11 +590,12 @@ namespace hdt
 		}
 	}
 
-	NiNode* ActorManager::Skeleton::cloneNodeTree(NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	// TODO: move to smart pointers to not leak memory
+	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
 	{
-		NiCloningProcess c;
-		auto ret = static_cast<NiNode*>(src->CreateClone(c));
-		src->ProcessClone(&c);
+		RE::NiCloningProcess c{};
+		auto ret = static_cast<RE::NiNode*>(src->CreateClone(c));
+		src->ProcessClone(c);
 
 		// FIXME: cloneHeadNodeTree just did this for ret, not both. Don't know if that matters. Armor parts need it on both.
 		renameTree(src, prefix, map);
@@ -589,35 +604,31 @@ namespace hdt
 		return ret;
 	}
 
-	void ActorManager::Skeleton::renameTree(NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	void ActorManager::Skeleton::renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
 	{
-		if (root->m_name)
-		{
-			std::string newName(prefix->cstr(), prefix->size());
-			newName += root->m_name;
-			if (map.insert(std::make_pair<IDStr, IDStr>(root->m_name, newName)).second)
-				_DMESSAGE("Rename Bone %s -> %s.", root->m_name, newName.c_str());
-			setNiNodeName(root, newName.c_str());
-		}
+		std::string newName(prefix->cstr(), prefix->size());
+		newName += root->name;
+		if (map.insert(std::make_pair<IDStr, IDStr>(root->name.c_str(), newName)).second)
+			spdlog::trace("Rename Bone {} -> {}.", root->name.c_str(), newName.c_str());
+		root->name = newName;
 
-		for (int i = 0; i < root->m_children.m_arrayBufLen; ++i)
+		for (RE::NiPointer<RE::NiAVObject> &child : root->children)
 		{
-			auto child = castNiNode(root->m_children.m_data[i]);
-			if (child)
-				renameTree(child, prefix, map);
+			if (auto *childNode = child->AsNode())
+				renameTree(childNode, prefix, map);
 		}
 	}
 
-	void ActorManager::Skeleton::doSkeletonClean(NiNode* dst, IString* prefix)
+	void ActorManager::Skeleton::doSkeletonClean(RE::NiNode* dst, IString* prefix)
 	{
-		for (int i = dst->m_children.m_arrayBufLen - 1; i >= 0; --i)
+		for (int i = dst->children.size() - 1; i >= 0; --i)
 		{
-			auto child = castNiNode(dst->m_children.m_data[i]);
+			auto child = castNiNode(dst->children[i].get());
 			if (!child) continue;
 
-			if (child->m_name && !strncmp(child->m_name, prefix->cstr(), prefix->size()))
+			if (0 == strncmp(child->name.c_str(), prefix->cstr(), prefix->size()))
 			{
-				dst->RemoveAt(i++);
+				dst->DetachChildAt(i++);
 			}
 			else
 			{
@@ -629,15 +640,15 @@ namespace hdt
 	// returns the name of the skeleton owner
 	std::string ActorManager::Skeleton::name()
 	{
-		if (skeleton->m_owner && skeleton->m_owner->baseForm) {
-			auto bname = DYNAMIC_CAST(skeleton->m_owner->baseForm, TESForm, TESFullName);
+		if (skeleton->userData && skeleton->userData->GetBaseObject()) {
+			auto bname = skeleton->userData->GetBaseObject()->As<RE::TESFullName>();
 			if (bname)
-				return bname->GetName();
+				return bname->fullName.c_str();
 		}
 		return "";
 	}
 
-	void ActorManager::Skeleton::addArmor(NiNode* armorModel)
+	void ActorManager::Skeleton::addArmor(RE::NiNode* armorModel)
 	{
 		IDType id = armors.size() ? armors.back().id + 1 : 0;
 		auto prefix = armorPrefix(id);
@@ -653,10 +664,10 @@ namespace hdt
 		doSkeletonMerge(npc, armorModel, prefix, armors.back().renameMap);
 	}
 
-	void ActorManager::Skeleton::attachArmor(NiNode* armorModel, NiAVObject* attachedNode)
+	void ActorManager::Skeleton::attachArmor(RE::NiNode* armorModel, RE::NiAVObject* attachedNode)
 	{
 		if (armors.size() == 0 || armors.back().hasPhysics())
-			_MESSAGE("Not attaching armor - no record or physics already exists");
+			spdlog::info("Not attaching armor - no record or physics already exists");
 
 		Armor& armor = armors.back();
 
@@ -664,7 +675,7 @@ namespace hdt
 		armor.armorWorn = attachedNode;
 		// That's why we set here the need to fix this armor in fixArmorNameMaps() (see its comment)
 		// to avoid this name change breaking processes like 'smp reset' when looking for the armor name in the armor nameMap.
-		armor.armorCurrentMeshName = attachedNode->m_name ? attachedNode->m_name : "";
+		armor.armorCurrentMeshName = attachedNode->name.c_str();
 		armor.mustFixNameMap = true;
 		mustFixOneArmorMap = true;
 
@@ -681,10 +692,9 @@ namespace hdt
 			}
 		}
 
-		if (instance()->m_disableSMPHairWhenWigEquipped && skeleton && skeleton->m_owner)
+		if (instance()->m_disableSMPHairWhenWigEquipped && skeleton && skeleton->userData)
 		{
-			TESForm* form = LookupFormByID(skeleton->m_owner->formID);
-			Actor* actor = DYNAMIC_CAST(form, TESForm, Actor);
+			RE::Actor* actor = skeleton->userData->As<RE::Actor>();
 			if (actor)
 				ActorManager().setHeadActiveIfNoHairArmor(actor, this);
 		}
@@ -695,7 +705,7 @@ namespace hdt
 		for (auto& i : armors)
 		{
 			if (!i.armorWorn) continue;
-			if (i.armorWorn->m_parent) continue;
+			if (i.armorWorn->parent) continue;
 
 			i.clearPhysics();
 			if (npc) doSkeletonClean(npc, i.prefix);
@@ -709,12 +719,12 @@ namespace hdt
 	{
 		for (auto& headPart : head.headParts)
 		{
-			if (!headPart.headPart->m_parent || cleanAll)
+			if (!headPart.headPart->parent || cleanAll)
 			{
 				if (cleanAll)
-					_DMESSAGE("Cleaning headpart %s due to clean all.", headPart.headPart->m_name);
+					spdlog::trace("Cleaning headpart {} due to clean all.", headPart.headPart->name.c_str());
 				else
-					_DMESSAGE("Headpart %s disconnected.", headPart.headPart->m_name);
+					spdlog::trace("Headpart {} disconnected.", headPart.headPart->name.c_str());
 
 				auto renameIt = this->head.renameMap.begin();
 
@@ -728,19 +738,19 @@ namespace hdt
 						if (findNode != this->head.nodeUseCount.end())
 						{
 							findNode->second -= 1;
-							_DMESSAGE("Decrementing use count by 1, it is now %d.", findNode->second);
+							spdlog::trace("Decrementing use count by 1, it is now {}.", findNode->second);
 							if (findNode->second <= 0)
 							{
-								_DMESSAGE("Node no longer in use, cleaning from skeleton.");
+								spdlog::trace("Node no longer in use, cleaning from skeleton.");
 								auto removeObj = findObject(npc, renameIt->second->cstr());
 								if (removeObj)
 								{
-									_DMESSAGE("Found node %s, removing.", removeObj->m_name);
-									auto parent = removeObj->m_parent;
+									spdlog::trace("Found node {}, removing.", removeObj->name.c_str());
+									auto parent = removeObj->parent;
 									if (parent)
 									{
-										parent->RemoveChild(removeObj);
-										removeObj->DecRef();
+										parent->DetachChild(removeObj);
+										removeObj->DecRefCount();
 									}
 								}
 								this->head.nodeUseCount.erase(findNode);
@@ -776,7 +786,7 @@ namespace hdt
 		armors.clear();
 	}
 
-	void ActorManager::Skeleton::calculateDistanceAndOrientationDifferenceFromSource(NiPoint3 sourcePosition, NiPoint3 sourceOrientation)
+	void ActorManager::Skeleton::calculateDistanceAndOrientationDifferenceFromSource(RE::NiPoint3 sourcePosition, RE::NiPoint3 sourceOrientation)
 	{
 		if (isPlayerCharacter())
 		{
@@ -787,7 +797,7 @@ namespace hdt
 		auto pos = position();
 		if (!pos.has_value())
 		{
-			m_distanceFromCamera2 = std::numeric_limits<float>::max();
+			m_distanceFromCamera2 = (std::numeric_limits<float>::max)();
 			return;
 		}
 
@@ -812,7 +822,7 @@ namespace hdt
 			if (headPart.state() != ItemState::e_NoPhysics)
 				hasPhysics = true;
 				});
-		_MESSAGE("%s isDrawn %d: %d", name(), hasPhysics);
+		spdlog::info("{} isDrawn: {}", name(), hasPhysics);
 
 		return hasPhysics;
 	}
@@ -822,13 +832,14 @@ namespace hdt
 		// TODO: do this better
 		// When entering/exiting an interior, NPCs are detached from the scene but not unloaded, so we need to check two levels up.
 		// This properly removes exterior cell armors from the physics world when entering an interior, and vice versa.
-		return skeleton->m_parent && skeleton->m_parent->m_parent && skeleton->m_parent->m_parent->m_parent;
+		return skeleton->parent && skeleton->parent->parent && skeleton->parent->parent->parent;
 	}
 
 	bool ActorManager::Skeleton::isPlayerCharacter() const
 	{
-		constexpr UInt32 playerFormID = 0x14;
-		return skeletonOwner == *g_thePlayer.GetPtr() || (skeleton->m_owner && skeleton->m_owner->formID == playerFormID);
+		// TODO: why do it both ways?
+		constexpr uint32_t playerFormID = 0x14;
+		return skeletonOwner.get() == RE::PlayerCharacter::GetSingleton() || (skeleton->userData && skeleton->userData->formID == playerFormID);
 	}
 
 	bool ActorManager::Skeleton::isInPlayerView()
@@ -851,24 +862,24 @@ namespace hdt
 			return false;
 
 		// We enable only the skeletons that can see the PC or the camera
-		const auto owner = DYNAMIC_CAST(this->skeletonOwner.get(), TESForm, Actor);
+		const auto owner = this->skeletonOwner->As<RE::Actor>();
 		if (owner) {
-			NiPoint3 hitLocation;
+			RE::NiPoint3 hitLocation;
 			const auto object = Actor_CalculateLOS(owner, &(i->m_cameraPositionDuringFrame), &hitLocation, 6.28);
 			return object ? false : true; // If object, we hit something on the path
 		}
 		return true; // should never happen, a skeleton without owner?
 	}
 
-	std::optional<NiPoint3> ActorManager::Skeleton::position() const
+	std::optional<RE::NiPoint3> ActorManager::Skeleton::position() const
 	{
 		if (npc)
 		{
 			// This works for lurker skeletons.
 			auto rootNode = findNode(npc, "NPC Root [Root]");
-			if (rootNode) return std::optional<NiPoint3>(rootNode->m_worldTransform.pos);
+			if (rootNode) return rootNode->world.translate;
 		}
-		return std::optional<NiPoint3>();
+		return {};
 	}
 
 	void ActorManager::Skeleton::updateWindFactor(float a_windFactor)
@@ -883,7 +894,7 @@ namespace hdt
 		return this->currentWindFactor;
 	}
 
-	bool ActorManager::Skeleton::updateAttachedState(const NiNode* playerCell, bool deactivate = false)
+	bool ActorManager::Skeleton::updateAttachedState(const RE::NiNode* playerCell, bool deactivate = false)
 	{
 		// 1- Skeletons that aren't active in any scene are always detached, unless they are in the
 		// same cell as the player character (workaround for issue in Ancestor Glade).
@@ -896,14 +907,14 @@ namespace hdt
 
 		if (deactivate)
 			state = SkeletonState::e_InactiveTooFar;
-		else if (isActiveInScene() || skeleton->m_parent && skeleton->m_parent->m_parent == playerCell)
+		else if (isActiveInScene() || skeleton->parent && skeleton->parent->parent == playerCell)
 		{
 			if (isPlayerCharacter())
 			{
 				// That setting defines whether we don't set the PC skeleton as active
 				// when it is in 1st person view, to avoid calculating physics uselessly.
 				if (!(instance()->m_disable1stPersonViewPhysics // disabling?
-					&& PlayerCamera::GetSingleton()->cameraState == PlayerCamera::GetSingleton()->cameraStates[0])) // 1st person view
+					&& RE::PlayerCamera::GetSingleton()->currentState == RE::PlayerCamera::GetSingleton()->cameraStates[0])) // 1st person view
 				{
 					isActive = true;
 					state = SkeletonState::e_ActiveIsPlayer;
@@ -951,22 +962,23 @@ namespace hdt
 	{
 		if (isFirstPersonSkeleton(this->skeleton))
 		{
-			_DMESSAGE("Not scanning head of first person skeleton.");
+			spdlog::trace("Not scanning head of first person skeleton.");
 			return;
 		}
 
 		if (!this->head.headNode)
 		{
-			_DMESSAGE("Actor has no head node.");
+			spdlog::trace("Actor has no head node.");
 			return;
 		}
 
 		std::unordered_set<std::string> physicsDupes;
 
-		if (instance()->m_disableSMPHairWhenWigEquipped && skeleton && skeleton->m_owner)
+		if (instance()->m_disableSMPHairWhenWigEquipped && skeleton)
 		{
-			TESForm* form = LookupFormByID(skeleton->m_owner->formID);
-			Actor* actor = DYNAMIC_CAST(form, TESForm, Actor);
+			// the what... looking up the form while having a pointer to the very form?
+			// TESForm* form = LookupFormByID(skeleton->userData->formID);
+			RE::Actor* actor = skeleton->userData ? skeleton->userData->As<RE::Actor>() : nullptr;
 			if (actor)
 				ActorManager().setHeadActiveIfNoHairArmor(actor, this);
 		}
@@ -978,41 +990,41 @@ namespace hdt
 
 			if (headPart.physicsFile.first.empty())
 			{
-				_DMESSAGE("No physics file for headpart %s.", headPart.headPart->m_name);
+				spdlog::trace("No physics file for headpart {}.", headPart.headPart->name.c_str());
 				continue;
 			}
 
 			if (physicsDupes.count(headPart.physicsFile.first))
 			{
-				_DMESSAGE("Previous head part generated physics system for file %s, skipping.",
+				spdlog::trace("Previous head part generated physics system for file {}, skipping.",
 					headPart.physicsFile.first.c_str());
 				continue;
 			}
 
 			std::unordered_map<IDStr, IDStr> renameMap = this->head.renameMap;
 
-			_DMESSAGE("Try create system for headpart %s physics file %s.", headPart.headPart->m_name,
-				headPart.physicsFile.first.c_str());
+			spdlog::trace("Try create system for headpart {} physics file {}.", headPart.headPart->name.c_str(),
+				headPart.physicsFile.first);
 			physicsDupes.insert(headPart.physicsFile.first);
 			auto system = SkyrimSystemCreator().createOrUpdateSystem(npc, this->head.headNode, &headPart.physicsFile, std::move(renameMap), nullptr);
 
 			if (system)
 			{
-				_DMESSAGE("Success.");
+				spdlog::trace("Success.");
 				headPart.setPhysics(system, isActive);
 				hasPhysics = true;
 			}
 		}
 	}
 
-	typedef bool (*_TESNPC_GetFaceGeomPath)(TESNPC* a_npc, char* a_buf);
-	RelocAddr<_TESNPC_GetFaceGeomPath> TESNPC_GetFaceGeomPath(offset::TESNPC_GetFaceGeomPath);
+	typedef bool (*_TESNPC_GetFaceGeomPath)(RE::TESNPC* a_npc, char* a_buf);
+	REL::Relocation<_TESNPC_GetFaceGeomPath> TESNPC_GetFaceGeomPath(REL::ID(24726));
 
-	void ActorManager::Skeleton::processGeometry(BSFaceGenNiNode* headNode, BSGeometry* geometry)
+	void ActorManager::Skeleton::processGeometry(RE::BSFaceGenNiNode* headNode, RE::BSGeometry* geometry)
 	{
 		if (this->head.headNode && this->head.headNode != headNode)
 		{
-			_DMESSAGE("Completely new head attached to skeleton, clearing tracking.");
+			spdlog::trace("Completely new head attached to skeleton, clearing tracking.");
 			for (auto& headPart : this->head.headParts)
 			{
 				headPart.clearPhysics();
@@ -1046,7 +1058,7 @@ namespace hdt
 
 		if (it != this->head.headParts.end())
 		{
-			_DMESSAGE("Geometry is already added as head part.");
+			spdlog::trace("Geometry is already added as head part.");
 			return;
 		}
 
@@ -1056,98 +1068,89 @@ namespace hdt
 		head.headParts.back().clearPhysics();
 
 		// Skinning
-		_DMESSAGE("Skinning geometry to skeleton.");
+		spdlog::trace("Skinning geometry to skeleton.");
 
-		if (!geometry->m_spSkinInstance || !geometry->m_spSkinInstance->m_spSkinData)
+		if (!geometry->skinInstance || !geometry->skinInstance->skinData)
 		{
-			_ERROR("Geometry is missing skin instance - how?");
+			spdlog::error("Geometry is missing skin instance - how?");
 			return;
 		}
 
 		auto fmd = static_cast<BSFaceGenModelExtraData*>(geometry->GetExtraData("FMD"));
 
-		BSGeometry* origGeom = nullptr;
-		NiGeometry* origNiGeom = nullptr;
+		RE::BSGeometry* origGeom = nullptr;
+		RE::NiGeometry* origNiGeom = nullptr;
 
-		if (fmd && fmd->m_model && fmd->m_model->unk10 && fmd->m_model->unk10->unk08)
+		if (fmd && fmd->m_model && fmd->m_model->modelMeshData && fmd->m_model->modelMeshData->faceNode)
 		{
-			_DMESSAGE("Original part node found via facegen extra model data.");
-			auto origRootNode = fmd->m_model->unk10->unk08->GetAsNiNode();
+			spdlog::trace("Original part node found via facegen extra model data.");
+			auto *origRootNode = fmd->m_model->modelMeshData->faceNode->AsNode();
 			head.headParts.back().physicsFile = DefaultBBP::instance()->scanBBP(origRootNode);
 			head.headParts.back().origPartRootNode = origRootNode;
-			for (int i = 0; i < origRootNode->m_children.m_size; i++)
+			for (auto &child : origRootNode->children)
 			{
-				if (origRootNode->m_children.m_data[i])
+				if (auto *geo = child->AsGeometry())
 				{
-					const auto geo = origRootNode->m_children.m_data[i]->GetAsBSGeometry();
-
-					if (geo)
-					{
-						origGeom = geo;
-						break;
-					}
+					origGeom = geo;
+					break;
 				}
 			}
 		}
 		else
 		{
-			_DMESSAGE("No facegen extra model data available, loading original facegeometry.");
+			spdlog::trace("No facegen extra model data available, loading original facegeometry.");
 			if (!head.npcFaceGeomNode)
 			{
-				if (skeleton->m_owner && skeleton->m_owner->baseForm)
+				if (skeleton->userData && skeleton->userData->GetBaseObject())
 				{
-					auto npc = DYNAMIC_CAST(skeleton->m_owner->baseForm, TESForm, TESNPC);
+					auto *npc = skeleton->userData->GetBaseObject()->As<RE::TESNPC>();
 					if (npc)
 					{
 						char filePath[MAX_PATH];
 						if (TESNPC_GetFaceGeomPath(npc, filePath))
 						{
-							_DMESSAGE("Loading facegeometry from path %s.", filePath);
-							static const int MAX_SIZE = sizeof(NiStream) + 0x200;
-							UInt8 niStreamMemory[MAX_SIZE];
-							memset(niStreamMemory, 0, MAX_SIZE);
-							NiStream* niStream = (NiStream*)niStreamMemory;
-							CALL_MEMBER_FN(niStream, ctor)();
+							spdlog::trace("Loading facegeometry from path {}.", filePath);
 
-							BSResourceNiBinaryStream binaryStream(filePath);
-							if (!binaryStream.IsValid())
+							NiStreamHelper stream;
+
+							RE::BSResourceNiBinaryStream binaryStream(filePath);
+							if (!binaryStream.good())
 							{
-								_ERROR("Somehow NPC facegeometry was not found.");
-								CALL_MEMBER_FN(niStream, dtor)();
+								spdlog::error("Somehow NPC facegeometry was not found.");
 							}
 							else
 							{
-								niStream->LoadStream(&binaryStream);
-								if (niStream->m_rootObjects.m_data[0])
+								stream->Load1(&binaryStream);
+								if (!stream->topObjects.empty())
 								{
-									auto rootFadeNode = niStream->m_rootObjects.m_data[0]->GetAsBSFadeNode();
+									auto *rootFadeNode = stream->topObjects[0]->AsFadeNode();
 									if (rootFadeNode)
 									{
-										_DMESSAGE("NPC facegeometry root fadeNode found.");
-										head.npcFaceGeomNode = rootFadeNode;
+										spdlog::trace("NPC facegeometry root fadeNode found.");
+										head.npcFaceGeomNode = RE::NiPointer{ rootFadeNode };
 									}
 									else
-										_DMESSAGE("NPC facegeometry root wasn't fadeNode as expected.");
-
+									{
+										spdlog::trace("NPC facegeometry root wasn't fadeNode as expected.");
+									}
 								}
-								CALL_MEMBER_FN(niStream, dtor)();
 							}
 						}
 					}
 				}
 			}
 			else
-				_DMESSAGE("Using cached facegeometry.");
+				spdlog::trace("Using cached facegeometry.");
 			if (head.npcFaceGeomNode)
 			{
-				head.headParts.back().physicsFile = DefaultBBP::instance()->scanBBP(head.npcFaceGeomNode);
-				auto obj = findObject(head.npcFaceGeomNode, geometry->m_name);
+				head.headParts.back().physicsFile = DefaultBBP::instance()->scanBBP(head.npcFaceGeomNode.get());
+				auto obj = findObject(head.npcFaceGeomNode.get(), geometry->name);
 				if (obj)
 				{
-					auto ob = obj->GetAsBSGeometry();
+					auto ob = obj->AsGeometry();
 					if (ob) origGeom = ob;
 					else {
-						auto on = obj->GetAsNiGeometry();
+						auto on = obj->AsNiGeometry();
 						if (on) origNiGeom = on;
 					}
 				}
@@ -1157,9 +1160,9 @@ namespace hdt
 		bool hasMerged = false;
 		bool hasRenames = false;
 
-		for (int boneIdx = 0; boneIdx < geometry->m_spSkinInstance->m_spSkinData->m_uiBones; boneIdx++)
+		for (int boneIdx = 0; boneIdx < geometry->skinInstance->skinData->bones; boneIdx++)
 		{
-			BSFixedString boneName("");
+			RE::BSFixedString boneName;
 
 			// skin the way the game does via FMD
 			if (boneIdx <= 7)
@@ -1172,11 +1175,11 @@ namespace hdt
 			{
 				if (origGeom)
 				{
-					boneName = origGeom->m_spSkinInstance->m_ppkBones[boneIdx]->m_name;
+					boneName = origGeom->skinInstance->bones[boneIdx]->name;
 				}
 				else if (origNiGeom)
 				{
-					boneName = origNiGeom->m_spSkinInstance->m_ppkBones[boneIdx]->m_name;
+					boneName = origNiGeom->spSkinInstance->bones[boneIdx]->name;
 				}
 			}
 
@@ -1184,7 +1187,7 @@ namespace hdt
 
 			if (renameIt != this->head.renameMap.end())
 			{
-				_DMESSAGE("Found renamed bone %s -> %s.", boneName, renameIt->second->cstr());
+				spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), renameIt->second->cstr());
 				boneName = renameIt->second->cstr();
 				hasRenames = true;
 			}
@@ -1193,7 +1196,7 @@ namespace hdt
 
 			if (!boneNode && !hasMerged)
 			{
-				_DMESSAGE("Bone not found on skeleton, trying skeleton merge.");
+				spdlog::trace("Bone not found on skeleton, trying skeleton merge.");
 				if (this->head.headParts.back().origPartRootNode)
 				{
 					doSkeletonMerge(npc, head.headParts.back().origPartRootNode, head.prefix, head.renameMap);
@@ -1203,24 +1206,23 @@ namespace hdt
 					// Facegen data doesn't have any tree structure to the skeleton. We need to make any new
 					// nodes children of the head node, so that they move properly when there's no physics.
 					// This case never happens to a lurker skeleton, thus we don't need to test.
-					auto headNode = findNode(head.npcFaceGeomNode, "NPC Head [Head]");
+					auto headNode = findNode(head.npcFaceGeomNode.get(), "NPC Head [Head]");
 					if (headNode)
 					{
-						NiTransform invTransform;
-						headNode->m_localTransform.Invert(invTransform);
-						for (int i = 0; i < head.npcFaceGeomNode->m_children.m_arrayBufLen; ++i)
+						RE::NiTransform invTransform = headNode->local.Invert();
+						for (int i = 0; i < head.npcFaceGeomNode->children.size(); ++i)
 						{
-							Ref<NiNode> child = castNiNode(head.npcFaceGeomNode->m_children.m_data[i]);
+							RE::NiPointer<RE::NiAVObject> child{ head.npcFaceGeomNode->children[i] };
 							// This case never happens to a lurker skeleton, thus we don't need to test.
-							if (child && !findNode(npc, child->m_name))
+							if (child && !findNode(npc, child->name))
 							{
-								child->m_localTransform = invTransform * child->m_localTransform;
-								head.npcFaceGeomNode->RemoveAt(i);
-								headNode->AttachChild(child, false);
+								child->local = invTransform * child->local;
+								head.npcFaceGeomNode->DetachChildAt(i);
+								headNode->AttachChild(child.get(), false);
 							}
 						}
 					}
-					doSkeletonMerge(npc, this->head.npcFaceGeomNode, head.prefix, head.renameMap);
+					doSkeletonMerge(npc, this->head.npcFaceGeomNode.get(), head.prefix, head.renameMap);
 				}
 				hasMerged = true;
 
@@ -1228,7 +1230,7 @@ namespace hdt
 
 				if (postMergeRenameIt != this->head.renameMap.end())
 				{
-					_DMESSAGE("Found renamed bone %s -> %s.", boneName, postMergeRenameIt->second->cstr());
+					spdlog::trace("Found renamed bone {} -> {}.", boneName.c_str(), postMergeRenameIt->second->cstr());
 					boneName = postMergeRenameIt->second->cstr();
 					hasRenames = true;
 				}
@@ -1238,39 +1240,39 @@ namespace hdt
 
 			if (!boneNode)
 			{
-				_ERROR("Bone %s not found after skeleton merge, geometry cannot be fully skinned.", boneName);
+				spdlog::error("Bone {} not found after skeleton merge, geometry cannot be fully skinned.", boneName.c_str());
 				continue;
 			}
 
-			geometry->m_spSkinInstance->m_ppkBones[boneIdx] = boneNode;
-			geometry->m_spSkinInstance->m_worldTransforms[boneIdx] = &boneNode->m_worldTransform;
+			geometry->skinInstance->bones[boneIdx] = boneNode;
+			geometry->skinInstance->boneWorldTransforms[boneIdx] = &boneNode->world;
 		}
 
-		geometry->m_spSkinInstance->m_pkRootParent = headNode;
+		geometry->skinInstance->rootParent = headNode;
 
 		if (hasRenames)
 		{
 			for (auto& entry : head.renameMap)
 			{
 				if ((this->head.headParts.back().origPartRootNode && findObject(this->head.headParts.back().origPartRootNode, entry.first->cstr())) ||
-					(this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode, entry.first->cstr())))
+					(this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode.get(), entry.first->cstr())))
 				{
 					auto findNode = this->head.nodeUseCount.find(entry.first);
 					if (findNode != this->head.nodeUseCount.end())
 					{
 						findNode->second += 1;
-						_DMESSAGE("Incrementing use count by 1, it is now %d.", findNode->second);
+						spdlog::trace("Incrementing use count by 1, it is now {}.", findNode->second);
 					}
 					else
 					{
 						this->head.nodeUseCount.insert(std::make_pair(entry.first, 1));
-						_DMESSAGE("First use of bone, count 1.");
+						spdlog::trace("First use of bone, count 1.");
 					}
 					head.headParts.back().renamedBonesInUse.insert(entry.first);
 				}
 			}
 		}
 
-		_DMESSAGE("Done skinning part.");
+		spdlog::trace("Done skinning part.");
 	}
 }

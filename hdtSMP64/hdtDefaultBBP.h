@@ -5,8 +5,6 @@
 #include <unordered_set>
 #include <set>
 
-class NiNode;
-
 namespace hdt
 {
 	class DefaultBBP
@@ -25,7 +23,7 @@ namespace hdt
 		};
 
 		static DefaultBBP* instance();
-		PhysicsFile scanBBP(NiNode* scan);
+		PhysicsFile scanBBP(RE::NiNode* scan);
 
 	private:
 		DefaultBBP();
@@ -34,8 +32,8 @@ namespace hdt
 		std::vector<Remap> remaps;
 
 		void loadDefaultBBPs();
-		PhysicsFile scanDefaultBBP(NiNode* scan);
-		NameMap getNameMap(NiNode* armor);
-		NameMap defaultNameMap(NiNode* armor);
+		PhysicsFile scanDefaultBBP(RE::NiNode* scan);
+		NameMap getNameMap(RE::NiNode* armor);
+		NameMap defaultNameMap(RE::NiNode* armor);
 	};
 }

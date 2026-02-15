@@ -1,6 +1,5 @@
 #pragma once
 
-#include "skse64/PapyrusActor.h"
 #include "../hdtSSEUtils/NetImmerseUtils.h"
 #include "../hdtSSEUtils/FrameworkUtils.h"
 
@@ -25,7 +24,7 @@ namespace hdt
 		, public IEventListener<FrameEvent>
 		, public IEventListener<ShutdownEvent>
 	{
-		using IDType = UInt32;
+		using IDType = uint32_t;
 
 	public:
 
@@ -79,15 +78,15 @@ namespace hdt
 		{
 			struct HeadPart : public PhysicsItem
 			{
-				Ref<BSGeometry> headPart;
-				Ref<NiNode> origPartRootNode;
+				Ref<RE::BSGeometry> headPart;
+				Ref<RE::NiNode> origPartRootNode;
 				std::set<IDStr> renamedBonesInUse;
 			};
 
 			IDType id;
 			Ref<IString> prefix;
-			Ref<BSFaceGenNiNode> headNode;
-			Ref<BSFadeNode> npcFaceGeomNode;
+			Ref<RE::BSFaceGenNiNode> headNode;
+			RE::NiPointer<RE::BSFadeNode> npcFaceGeomNode;
 			std::vector<HeadPart> headParts;
 			std::unordered_map<IDStr, IDStr> renameMap;
 			std::unordered_map<IDStr, uint8_t> nodeUseCount;
@@ -99,7 +98,7 @@ namespace hdt
 		{
 			IDType id;
 			Ref<IString> prefix;
-			Ref<NiAVObject> armorWorn;
+			Ref<RE::NiAVObject> armorWorn;
 			std::unordered_map<IDStr, IDStr> renameMap;
 			// @brief This bool is set to true when the first name for the NiAVObject armor is attributed by the Skyrim executable,
 			// and set back to false the name map is fixed (see fixArmorNameMaps()),
@@ -110,16 +109,16 @@ namespace hdt
 
 		struct Skeleton
 		{
-			NiPointer<TESObjectREFR> skeletonOwner;
-			Ref<NiNode> skeleton;
-			Ref<NiNode> npc;
+			RE::NiPointer<RE::TESObjectREFR> skeletonOwner;
+			Ref<RE::NiNode> skeleton;
+			Ref<RE::NiNode> npc;
 			Head head;
 			SkeletonState state;
 			bool mustFixOneArmorMap = false;
 
 			std::string name();
-			void addArmor(NiNode* armorModel);
-			void attachArmor(NiNode* armorModel, NiAVObject* attachedNode);
+			void addArmor(RE::NiNode* armorModel);
+			void attachArmor(RE::NiNode* armorModel, RE::NiAVObject* attachedNode);
 
 			void cleanArmor();
 			void cleanHead(bool cleanAll = false);
@@ -131,12 +130,12 @@ namespace hdt
 			// can be directly used for our needs later; the distance is provided squared for performance reasons.
 			// @param sourcePosition the position of the camera
 			// @param sourceOrientation the orientation of the camera
-			void calculateDistanceAndOrientationDifferenceFromSource(NiPoint3 sourcePosition, NiPoint3 sourceOrientation);
+			void calculateDistanceAndOrientationDifferenceFromSource(RE::NiPoint3 sourcePosition, RE::NiPoint3 sourceOrientation);
 
 			bool isPlayerCharacter() const;
 			bool isInPlayerView();
 			bool hasPhysics = false;
-			std::optional<NiPoint3> position() const;
+			std::optional<RE::NiPoint3> position() const;
 
 			// @brief Update windfactor for skeleton
 			// @param a_windFactor is a percentage [0,1] with 0 being no wind efect to 1 being full wind effect.
@@ -147,24 +146,24 @@ namespace hdt
 			// @brief Updates the states and activity of skeletons, their heads parts and armors.
 			// @param playerCell The skeletons not in the player cell are automatically inactive.
 			// @param deactivate If set to true, the concerned skeleton will be inactive, regardless of other elements.
-			bool updateAttachedState(const NiNode* playerCell, bool deactivate);
+			bool updateAttachedState(const RE::NiNode* playerCell, bool deactivate);
 
 			// bool deactivate(); // FIXME useless?
 			void reloadMeshes();
 
 			void scanHead();
-			void processGeometry(BSFaceGenNiNode* head, BSGeometry* geometry);
+			void processGeometry(RE::BSFaceGenNiNode* head, RE::BSGeometry* geometry);
 
-			static void doSkeletonMerge(NiNode* dst, NiNode* src, IString* prefix,
+			static void doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix,
 				std::unordered_map<IDStr, IDStr>& map);
-			static void doSkeletonClean(NiNode* dst, IString* prefix);
-			static NiNode* cloneNodeTree(NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
-			static void renameTree(NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
+			static void doSkeletonClean(RE::NiNode* dst, IString* prefix);
+			static RE::NiNode* cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
+			static void renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
 
 			std::vector<Armor>& getArmors() { return armors; }
 
 			// @brief This is the squared distance between the skeleton and the camera.
-			float m_distanceFromCamera2 = std::numeric_limits<float>::max();
+			float m_distanceFromCamera2 = (std::numeric_limits<float>::max)();
 
 			// @brief This is |camera2SkeletonVector|*cos(angle between that vector and the camera direction).
 			float m_cosAngleFromCameraDirectionTimesSkeletonDistance = -1.;
@@ -182,9 +181,9 @@ namespace hdt
 		std::recursive_mutex m_lock;
 		std::vector<Skeleton> m_skeletons;
 
-		Skeleton& getSkeletonData(NiNode* skeleton);
-		ActorManager::Skeleton* get3rdPersonSkeleton(Actor* actor);
-		void ActorManager::setHeadActiveIfNoHairArmor(Actor* actor, Skeleton* skeleton);
+		Skeleton& getSkeletonData(RE::NiNode* skeleton);
+		ActorManager::Skeleton* get3rdPersonSkeleton(RE::Actor* actor);
+		void setHeadActiveIfNoHairArmor(RE::Actor* actor, Skeleton* skeleton);
 
 	public:
 		ActorManager();
@@ -229,12 +228,12 @@ namespace hdt
 		// @brief On this event, we decide which skeletons will be active for physics this frame.
 		void onEvent(const FrameEvent& e) override;
 
-		void onEvent(const MenuOpenCloseEvent&);
+		void onEvent(const RE::MenuOpenCloseEvent&);
 		void onEvent(const ShutdownEvent&) override;
 		void onEvent(const SkinSingleHeadGeometryEvent&) override;
 		void onEvent(const SkinAllHeadGeometryEvent&) override;
 
-		bool skeletonNeedsParts(NiNode* skeleton);
+		bool skeletonNeedsParts(RE::NiNode* skeleton);
 		std::vector<Skeleton>& getSkeletons();//Altered by Dynamic HDT
 
 		bool m_skinNPCFaceParts = true;
@@ -247,8 +246,8 @@ namespace hdt
 		bool m_disable1stPersonViewPhysics = false;
 
 	private:
-		NiPoint3 m_cameraPositionDuringFrame;
-		static NiNode* getCameraNode();
+		RE::NiPoint3 m_cameraPositionDuringFrame;
+		static RE::NiNode* getCameraNode();
 
 		void setSkeletonsActive(const bool updateMetrics = false);
 	};

@@ -520,7 +520,7 @@ namespace hdt
 			: m_device(cuGetDevice()),
 			m_numColliders(shape->m_colliders.size()),
 			m_penetrationType(abs(shape->m_shapeProp.penetration) > FLT_EPSILON ? eInternal : eNone),
-			m_body(shape->m_owner->m_cudaObject->m_imp),
+			m_body(shape->userData->m_cudaObject->m_imp),
 			m_input(shape->m_colliders.size()),
 			m_output(shape->m_colliders.size()),
 			m_tree(&shape->m_tree, m_body->m_stream),
@@ -597,7 +597,7 @@ namespace hdt
 		Imp(PerVertexShape* shape)
 			: m_device(cuGetDevice()),
 			m_numColliders(shape->m_colliders.size()),
-			m_body(shape->m_owner->m_cudaObject->m_imp),
+			m_body(shape->userData->m_cudaObject->m_imp),
 			m_input(shape->m_colliders.size()),
 			m_output(shape->m_colliders.size()),
 			m_tree(&shape->m_tree, m_body->m_stream),

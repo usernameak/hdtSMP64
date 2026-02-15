@@ -96,7 +96,7 @@ namespace hdt
 	{
 		typedef btSequentialImpulseConstraintSolverMt Base;
 	public:
-		GroupConstraintSolver::GroupConstraintSolver();
+		GroupConstraintSolver();
 
 		btScalar solveSingleIteration(int iteration, btCollisionObject** bodies, int numBodies,
 		                              btPersistentManifold** manifoldPtr, int numManifolds,

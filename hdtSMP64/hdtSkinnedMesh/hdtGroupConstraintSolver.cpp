@@ -51,7 +51,7 @@ namespace hdt
 
 	inline std::tuple<__m128, __m128> unpack256(__m256 ymm)
 	{
-		return std::tie(_mm256_castps256_ps128(ymm), _mm256_extractf128_ps(ymm, 1));
+		return std::tuple(_mm256_castps256_ps128(ymm), _mm256_extractf128_ps(ymm, 1));
 	}
 
 	// Enhanced version of gResolveSingleConstraintRowGeneric_sse2 with AVX

@@ -1,30 +1,31 @@
 #pragma once
+
 #include "hdtSkinnedMesh/hdtBulletHelper.h"
 #include "../hdtSSEUtils/NetImmerseUtils.h"
 
 namespace hdt
 {
-	btQuaternion convertNi(const NiMatrix33& rhs);
+	btQuaternion convertNi(const RE::NiMatrix3& rhs);
 
-	inline btVector3 convertNi(const NiPoint3& rhs)
+	inline btVector3 convertNi(const RE::NiPoint3& rhs)
 	{
 		return btVector3(rhs.x, rhs.y, rhs.z);
 	}
 
-	inline btQsTransform convertNi(const NiTransform& rhs)
+	inline btQsTransform convertNi(const RE::NiTransform& rhs)
 	{
 		btQsTransform ret;
-		ret.setBasis(convertNi(rhs.rot));
-		ret.setOrigin(convertNi(rhs.pos));
+		ret.setBasis(convertNi(rhs.rotate));
+		ret.setOrigin(convertNi(rhs.translate));
 		ret.setScale(rhs.scale);
 		return ret;
 	}
 
-	NiPoint3 convertBt(const btVector3& rhs);
-	NiMatrix33 convertBt(const btMatrix3x3& rhs);
-	NiMatrix33 convertBt(const btQuaternion& rhs);
-	NiTransform convertBt(const btQsTransform& rhs);
+	RE::NiPoint3 convertBt(const btVector3& rhs);
+	RE::NiMatrix3 convertBt(const btMatrix3x3& rhs);
+	RE::NiMatrix3 convertBt(const btQuaternion& rhs);
+	RE::NiTransform convertBt(const btQsTransform& rhs);
 
-	static const float scaleRealWorld = 0.01425;
-	static const float scaleSkyrim = 1 / scaleRealWorld;
+	static constexpr float scaleRealWorld = 0.01425f;
+	static constexpr float scaleSkyrim = 1.f / scaleRealWorld;
 }

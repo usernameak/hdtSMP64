@@ -21,7 +21,7 @@ namespace hdt
 			uint8_t boneIndices[4];
 		};
 
-		SkyrimSystem(NiNode* skeleton);
+		SkyrimSystem(RE::NiNode* skeleton);
 
 		SkinnedMeshBone* findBone(IDStr name);
 		SkinnedMeshBody* findBody(IDStr name);
@@ -33,8 +33,8 @@ namespace hdt
 		const std::vector<Ref<SkinnedMeshBody>>& meshes() const { return m_meshes; }
 
 
-		Ref<NiNode> m_skeleton;
-		Ref<NiNode> m_oldRoot;
+		Ref<RE::NiNode> m_skeleton;
+		Ref<RE::NiNode> m_oldRoot;
 		bool m_initialized = false;
 		float m_windFactor = 1.f; // wind factor for the system (i.e., full actor/skeleton) (calculated based off obstructions)
 
@@ -48,7 +48,7 @@ namespace hdt
 	{
 	public:
 		SkyrimSystemCreator();
-		Ref<SkyrimSystem> createOrUpdateSystem(NiNode* skeleton, NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<IDStr, IDStr> renameMap, SkyrimSystem* old_system);
+		Ref<SkyrimSystem> createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile *file, std::unordered_map<IDStr, IDStr> renameMap, SkyrimSystem* old_system);
 	protected:
 
 		using VertexOffsetMap = std::unordered_map<std::string, int>;
@@ -56,12 +56,12 @@ namespace hdt
 		IDStr getRenamedBone(IDStr name);
 
 		Ref<SkyrimSystem> m_mesh;
-		NiNode* m_skeleton;
-		NiAVObject* m_model;
+		RE::NiNode* m_skeleton;
+		RE::NiAVObject* m_model;
 		XMLReader* m_reader;
 		std::unordered_map<IDStr, IDStr> m_renameMap;
 
-		NiNode* findObjectByName(const IDStr& name);
+		RE::NiNode* findObjectByName(const IDStr& name);
 		SkyrimBone* getOrCreateBone(const IDStr& name);
 
 		std::string m_filePath;
@@ -185,8 +185,8 @@ namespace hdt
 		const StiffSpringConstraintTemplate& getStiffSpringConstraintTemplate(const IDStr& name);
 		const ConeTwistConstraintTemplate& getConeTwistConstraintTemplate(const IDStr& name);
 
-		SkyrimBone* SkyrimSystemCreator::createBoneFromNodeName(const IDStr& bodyName, const IDStr& templateName = "", const bool readTemplate = false, SkyrimSystem* old_system = nullptr);
-		void SkyrimSystemCreator::readOrUpdateBone(SkyrimSystem* old_system = nullptr);
+		SkyrimBone* createBoneFromNodeName(const IDStr& bodyName, const IDStr& templateName = "", const bool readTemplate = false, SkyrimSystem* old_system = nullptr);
+		void readOrUpdateBone(SkyrimSystem* old_system = nullptr);
 		Ref<SkyrimBody> readPerVertexShape(DefaultBBP::NameMap meshNameMap);
 		Ref<SkyrimBody> readPerTriangleShape(DefaultBBP::NameMap* meshNameMap);
 		Ref<Generic6DofConstraint> readGenericConstraint();
@@ -196,11 +196,11 @@ namespace hdt
 		std::shared_ptr<btCollisionShape> readShape();
 
 		template <typename ... Args>
-		void Error(const char* fmt, Args ... args);
+		void Error(std::string_view fmt, Args &&... args);
 		template <typename ... Args>
-		void Warning(const char* fmt, Args ... args);
+		void Warning(std::string_view fmt, Args &&... args);
 		template <typename ... Args>
-		void VMessage(const char* fmt, Args ... args);
+		void VMessage(std::string_view fmt, Args &&... args);
 
 		std::vector<std::shared_ptr<btCollisionShape>> m_shapeRefs;
 	};

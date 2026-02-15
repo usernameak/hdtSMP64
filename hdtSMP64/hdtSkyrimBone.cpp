@@ -4,7 +4,7 @@
 
 namespace hdt
 {
-	SkyrimBone::SkyrimBone(IDStr name, NiNode* node, NiNode* skeleton, btRigidBody::btRigidBodyConstructionInfo& ci)
+	SkyrimBone::SkyrimBone(IDStr name, RE::NiNode* node, RE::NiNode* skeleton, btRigidBody::btRigidBodyConstructionInfo& ci)
 		: SkinnedMeshBone(name, ci), m_node(node), m_skeleton(skeleton)
 	{
 		if (ci.m_mass)
@@ -12,7 +12,7 @@ namespace hdt
 		else m_rig.setCollisionFlags(btCollisionObject::CF_KINEMATIC_OBJECT);
 
 		m_depth = 0;
-		for (auto i = node; i; i = i->m_parent)
+		for (auto i = node; i; i = i->parent)
 			++m_depth;
 
 		this->m_forceUpdateType = hdt::ForceUpdateList::GetSingleton()->isAmong(this->m_name);
@@ -20,14 +20,14 @@ namespace hdt
 
 	void SkyrimBone::resetTransformToOriginal()
 	{
-		m_node->m_localTransform = convertBt(m_origTransform);
+		m_node->local = convertBt(m_origTransform);
 		updateTransformUpDown(m_node, false);
 	}
 
 	void SkyrimBone::readTransform(float timeStep)
 	{
 		auto oldScale = m_currentTransform.getScale();
-		m_currentTransform = convertNi(m_node->m_worldTransform);
+		m_currentTransform = convertNi(m_node->world);
 		auto newScale = m_currentTransform.getScale();
 
 		auto current = m_rig.getWorldTransform();
@@ -56,8 +56,8 @@ namespace hdt
 		
 		if (timeStep <= RESET_PHYSICS)
 		{
-			m_origToSkeletonTransform = convertNi(m_skeleton->m_worldTransform).inverse() * convertNi(m_node->m_worldTransform);
-			m_origTransform = convertNi(m_node->m_localTransform);
+			m_origToSkeletonTransform = convertNi(m_skeleton->world).inverse() * convertNi(m_node->world);
+			m_origTransform = convertNi(m_node->local);
 			m_rig.setWorldTransform(dest);
 			m_rig.setInterpolationWorldTransform(dest);
 			m_rig.setLinearVelocity(btVector3(0, 0, 0));
@@ -108,25 +108,25 @@ namespace hdt
 		m_currentTransform.setBasis(transform.getBasis());
 		m_currentTransform.setOrigin(transform.getOrigin());
 
-		m_node->m_worldTransform.rot = convertBt(transform.getBasis());
-		m_node->m_worldTransform.pos = convertBt(transform.getOrigin());
-		m_node->m_worldTransform = m_node->m_worldTransform;
+		m_node->world.rotate = convertBt(transform.getBasis());
+		m_node->world.translate = convertBt(transform.getOrigin());
+		m_node->world = m_node->world;
 
 		if (m_forceUpdateType == 1) {
 			updateTransformUpDown(m_node, false);
 		}
 		else if (m_forceUpdateType == 2) {
-			for (int j = 0; j < m_node->m_children.m_size; ++j) {
-				auto m_weapon_node = m_node->m_children.m_data[j];
+			for (auto &m_weapon_node : m_node->children)
+			{
 				//Why when re-equipping things some nodes turn into nullptr?
 				//Equipment skeleton renamed weapon bones which were romoved when the equipment was disattahced.
-				if (!m_weapon_node)continue;
-				m_weapon_node->m_worldTransform = m_node->m_worldTransform;
-				updateTransformUpDown(m_weapon_node,false);
+				if (!m_weapon_node) continue;
+				m_weapon_node->world = m_node->world;
+				updateTransformUpDown(m_weapon_node.get(), false);
 			}
 		}
 
-		//_MESSAGE("wrote transforms bone %s [%f, %f, %f]", m_node->m_name, m_node->m_worldTransform.pos.x, m_node->m_worldTransform.pos.y, m_node->m_worldTransform.pos.z);
+		//_MESSAGE("wrote transforms bone %s [%f, %f, %f]", m_node->m_name, m_node->world.pos.x, m_node->world.pos.y, m_node->world.pos.z);
 
 		//auto parentTransform = m_node->m_parent ? m_node->m_parent->unkTransform : NiTransform();
 		//NiTransform invParentTransform;
@@ -140,8 +140,8 @@ namespace hdt
 	//void SkyrimBone::debugPrint(std::string name) {
 	//	if (this->m_name == name && SkyrimPhysicsWorld::get()->isSuspended() == false) {
 	//		auto tf0 = m_rig.getWorldTransform().getOrigin();
-	//		auto tf = (convertNi(m_skeleton->m_worldTransform).inverse() * convertNi(m_node->m_worldTransform)).getOrigin();
-	//		auto tf1 = (convertNi(m_node->m_parent->m_parent->m_worldTransform).inverse() * convertNi(m_node->m_worldTransform)).getOrigin();
+	//		auto tf = (convertNi(m_skeleton->world).inverse() * convertNi(m_node->world)).getOrigin();
+	//		auto tf1 = (convertNi(m_node->m_parent->m_parent->world).inverse() * convertNi(m_node->world)).getOrigin();
 
 	//		Console_Print("wrote transforms bone %s [%.3f, %.3f, %.3f] | [%.3f, %.3f, %.3f] | [%.3f, %.3f, %.3f], %d, Kinematic: %s", m_node->m_name, tf0.x(), tf0.y(), tf0.z(), tf.x(), tf.y(), tf.z(), tf1.x(), tf1.y(), tf1.z(), clock(), m_rig.isStaticOrKinematicObject() ? "true" : "false");
 	//	}
