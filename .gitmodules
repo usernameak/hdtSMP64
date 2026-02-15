@@ -3,4 +3,4 @@
 	url = git@github.com:usernameak/commonlibsse.git
 [submodule "lib/bullet3"]
 	path = lib/bullet3
-	url = https://github.com/bulletphysics/bullet3
+	url = git@github.com:usernameak/bullet3.git
