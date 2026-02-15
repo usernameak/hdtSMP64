@@ -20,7 +20,9 @@ rule("msvc_settings")
     on_config(function (target)
         if is_mode("releasedbg") then
             target:add("cxflags", "cl::/Gy", {force=true})
-            target:add("ldflags", "link::-OPT:REF", "link::-OPT:ICF", {force=true})
+            if target:kind() ~= "static" then
+                target:add("ldflags", "link::-OPT:REF", "link::-OPT:ICF")
+            end
         end
     end)
 
