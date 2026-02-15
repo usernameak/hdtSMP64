@@ -96,7 +96,7 @@ namespace hdt
 
 						for (int i = 0; i < m_skeleton->children.size(); ++i)
 						{
-							auto node = m_skeleton->children[i]->AsNode();
+							auto *node = castNiNode(m_skeleton->children[i].get());
 							if (node)
 							{
 								updateTransformUpDown(node, true);
