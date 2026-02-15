@@ -8,7 +8,6 @@
 // 0x2C8  
 
 namespace hdt {
-	size_t randomGenerator(size_t min, size_t max);
 	void WeatherCheck();
 
 	RE::NiPoint3* getWindDirection();

@@ -365,14 +365,16 @@ namespace hdt
 
 	static void Main_SetHooks()
 	{
-		DetourAttach((void**)Main_Frame_Trampoline, &Main_Frame_Hook);
-		DetourAttach((void**)Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
+		Main_Frame_Trampoline = Main_Frame.get();
+		DetourAttach((void**)&Main_Frame_Trampoline, &Main_Frame_Hook);
+		Main_FrameSync_Trampoline = Main_FrameSync.get();
+		DetourAttach((void**)&Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
 	}
 
 	static void Main_RemoveHooks()
 	{
-		DetourDetach((void**)Main_Frame_Trampoline, &Main_Frame_Hook);
-		DetourDetach((void**)Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
+		DetourDetach((void**)&Main_Frame_Trampoline, &Main_Frame_Hook);
+		DetourDetach((void**)&Main_FrameSync_Trampoline, &Main_FrameSync_Hook);
 	}
 
 	// END  : class Main

@@ -36,7 +36,7 @@ namespace hdt
 		RE::BSResourceNiBinaryStream fin(path);
 		if (!fin.good()) return "";
 
-		size_t readed;
+		uint32_t readed;
 		char buffer[4096];
 		std::string ret;
 		do {

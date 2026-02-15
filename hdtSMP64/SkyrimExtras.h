@@ -36,6 +36,6 @@ public:
 
 inline float GetGameStepRealTime()
 {
-	static REL::Relocation<float*> seconds{ RELOCATION_ID(523661, 410120) };
+	static REL::Relocation<float*> seconds{ RELOCATION_ID(523661, 410200) };
 	return *seconds;
 }

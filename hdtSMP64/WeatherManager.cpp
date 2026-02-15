@@ -34,11 +34,19 @@ static inline size_t randomGeneratorLowMoreProbable(size_t lowermin, size_t lowe
 	}
 }
 
-size_t hdt::randomGenerator(size_t min, size_t max) {
+static size_t randomGenerator(size_t min, size_t max) {
 	std::mt19937 rng;
 	rng.seed(std::random_device()());
 	//rng.seed(std::chrono::high_resolution_clock::now().time_since_epoch().count());
-	std::uniform_int_distribution<std::mt19937::result_type> dist(min, max);
+	std::uniform_int_distribution<size_t> dist(min, max);
+
+	return dist(rng);
+}
+
+static float randomGenerator(float min, float max) {
+	std::mt19937 rng;
+	rng.seed(std::random_device()());
+	std::uniform_real_distribution<float> dist(min, max);
 
 	return dist(rng);
 }

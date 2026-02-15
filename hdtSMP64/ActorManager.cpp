@@ -298,7 +298,7 @@ namespace hdt
 				const auto world = SkyrimPhysicsWorld::get();
 				const auto wind = getWindDirection();
 				if (world->m_enableWind && wind && !(btFuzzyZero(wind->Length()))) {
-					const auto owner = i.skeletonOwner.get()->As<RE::Actor>();
+					const auto owner = i.skeletonOwner ? i.skeletonOwner->As<RE::Actor>() : nullptr;
 					if (owner) {
 						auto windray = *wind * -1; // reverse wind raycast to find obstruction
 						RE::NiPoint3 hitLocation;
@@ -549,7 +549,7 @@ namespace hdt
 	{
 		for (auto& i : m_skeletons)
 		{
-			const auto owner = i.skeletonOwner->As<RE::Actor>();
+			const auto owner = i.skeletonOwner ? i.skeletonOwner->As<RE::Actor>() : nullptr;
 			if (actor == owner && i.skeleton && !isFirstPersonSkeleton(i.skeleton))
 				return &i;
 		}
@@ -563,7 +563,7 @@ namespace hdt
 			auto *srcChild = srcChildAV->AsNode();
 			if (!srcChild) continue;
 
-			if (!srcChild->name.empty())
+			if (srcChild->name.empty())
 			{
 				doSkeletonMerge(dst, srcChild, prefix, map);
 				continue;
@@ -594,6 +594,8 @@ namespace hdt
 	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
 	{
 		RE::NiCloningProcess c{};
+		c.copyType = 1; // COPY_EXACT
+		c.scale = RE::NiPoint3(1.f, 1.f, 1.f);
 		auto ret = static_cast<RE::NiNode*>(src->CreateClone(c));
 		src->ProcessClone(c);
 
@@ -862,7 +864,7 @@ namespace hdt
 			return false;
 
 		// We enable only the skeletons that can see the PC or the camera
-		const auto owner = this->skeletonOwner->As<RE::Actor>();
+		const auto owner = this->skeletonOwner ? this->skeletonOwner->As<RE::Actor>() : nullptr;
 		if (owner) {
 			RE::NiPoint3 hitLocation;
 			const auto object = Actor_CalculateLOS(owner, &(i->m_cameraPositionDuringFrame), &hitLocation, 6.28);
