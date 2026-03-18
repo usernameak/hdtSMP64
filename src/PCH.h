@@ -115,6 +115,17 @@ namespace std
 			return std::hash<std::string>()(id.cstr());
 		}
 	};
+
+	// TODO: should this be contributed to CommonLibSSE-NG?
+	template <class CharT>
+	struct hash<RE::detail::BSFixedString<CharT>>
+	{
+	public:
+		[[nodiscard]] inline std::size_t operator()(const RE::detail::BSFixedString<CharT>& a_key) const noexcept
+		{
+			return std::hash<const CharT*>{}(a_key.data());
+		}
+	};
 }
 
 #define DLLEXPORT __declspec(dllexport)

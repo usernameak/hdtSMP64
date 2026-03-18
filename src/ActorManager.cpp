@@ -230,10 +230,10 @@ namespace hdt
 
 				for (auto& entry : skeleton.head.renameMap) {
 					// This case never happens to a lurker skeleton, thus we don't need to test.
-					auto node = findNode(headPartIter->origPartRootNode.get(), entry.second->cstr());
+					auto node = findNode(headPartIter->origPartRootNode.get(), entry.second);
 					if (node) {
-						logger::debug("Rename node {} -> {}.", entry.second->cstr(), entry.first->cstr());
-						setNiNodeName(node, entry.first->cstr());
+						logger::debug("Rename node {} -> {}.", entry.second.c_str(), entry.first.c_str());
+						node->name = entry.first;
 					}
 				}
 			}
@@ -602,12 +602,12 @@ namespace hdt
 		return 0;
 	}
 
-	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		doSkeletonMerge(dst, src, prefix, map, dst);
 	}
 
-	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map, RE::NiNode* dstRoot)
+	void ActorManager::Skeleton::doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map, RE::NiNode* dstRoot)
 	{
 		const auto& children = src->GetChildren();
 
@@ -638,7 +638,7 @@ namespace hdt
 		}
 	}
 
-	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	RE::NiNode* ActorManager::Skeleton::cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		//
 		RE::NiCloningProcess c;
@@ -658,12 +658,12 @@ namespace hdt
 		return ret;
 	}
 
-	void ActorManager::Skeleton::renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map)
+	void ActorManager::Skeleton::renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map)
 	{
 		if (root->name.size()) {
 			std::string newName(prefix->cstr(), prefix->size());
 			newName += root->name;
-			if (map.insert(std::make_pair<IDStr, IDStr>(root->name.c_str(), newName)).second) {
+			if (map.insert(std::make_pair<RE::BSFixedString, RE::BSFixedString>(root->name.c_str(), newName)).second) {
 				logger::debug("Rename Bone {} -> {}.", root->name, newName.c_str());
 			}
 
@@ -837,7 +837,7 @@ namespace hdt
 							logger::debug("Decrementing use count by 1, it is now {}.", findNode->second);
 							if (findNode->second <= 0) {
 								logger::debug("Node no longer in use, cleaning from skeleton.");
-								auto removeObj = findObject(npc.get(), renameIt->second->cstr());
+								auto removeObj = findObject(npc.get(), renameIt->second);
 								if (removeObj) {
 									logger::debug("Found node {}, removing.", removeObj->name);
 									auto parent = removeObj->parent;
@@ -1298,7 +1298,7 @@ namespace hdt
 					boneName = fmd->bones[boneIdx];
 			}
 
-			if (!*boneName.c_str()) {
+			if (boneName.empty()) {
 				if (origGeom) {
 					const auto& rd = origGeom->GetGeometryRuntimeData();
 					if (rd.skinInstance && rd.skinInstance->skinData && boneIdx < rd.skinInstance->skinData->bones) {
@@ -1322,8 +1322,8 @@ namespace hdt
 
 			auto renameIt = this->head.renameMap.find(boneName.c_str());
 			if (renameIt != this->head.renameMap.end()) {
-				logger::debug("Found renamed bone {} -> {}.", boneName, renameIt->second->cstr());
-				boneName = renameIt->second->cstr();
+				logger::debug("Found renamed bone {} -> {}.", boneName, renameIt->second.c_str());
+				boneName = renameIt->second;
 				hasRenames = true;
 			}
 
@@ -1362,8 +1362,8 @@ namespace hdt
 				auto postMergeRenameIt = this->head.renameMap.find(boneName.c_str());
 
 				if (postMergeRenameIt != this->head.renameMap.end()) {
-					logger::debug("Found renamed bone {} -> {}.", boneName, postMergeRenameIt->second->cstr());
-					boneName = postMergeRenameIt->second->cstr();
+					logger::debug("Found renamed bone {} -> {}.", boneName, postMergeRenameIt->second.c_str());
+					boneName = postMergeRenameIt->second;
 					hasRenames = true;
 				}
 
@@ -1383,7 +1383,7 @@ namespace hdt
 
 		if (hasRenames) {
 			for (auto& entry : head.renameMap) {
-				if ((this->head.headParts.back().origPartRootNode && findObject(this->head.headParts.back().origPartRootNode.get(), entry.first->cstr())) || (this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode.get(), entry.first->cstr()))) {
+				if ((this->head.headParts.back().origPartRootNode && findObject(this->head.headParts.back().origPartRootNode.get(), entry.first)) || (this->head.npcFaceGeomNode && findObject(this->head.npcFaceGeomNode.get(), entry.first))) {
 					auto findNode = this->head.nodeUseCount.find(entry.first);
 					if (findNode != this->head.nodeUseCount.end()) {
 						findNode->second += 1;

@@ -25,9 +25,9 @@ namespace hdt
 		SkyrimSystem(RE::NiNode* skeleton);
 		~SkyrimSystem() override = default;
 
-		SkinnedMeshBone* findBone(IDStr name);
-		SkinnedMeshBody* findBody(IDStr name);
-		int findBoneIdx(IDStr name);
+		SkinnedMeshBone* findBone(const RE::BSFixedString& name);
+		SkinnedMeshBody* findBody(const RE::BSFixedString& name);
+		int findBoneIdx(const RE::BSFixedString& name);
 
 		void readTransform(float timeStep) override;
 		void writeTransform() override;
@@ -50,7 +50,7 @@ namespace hdt
 	public:
 		SkyrimSystemCreator();
 
-		RE::BSTSmartPointer<SkyrimSystem> createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile_t* file, std::unordered_map<IDStr, IDStr>&& renameMap, SkyrimSystem* old_system);
+		RE::BSTSmartPointer<SkyrimSystem> createOrUpdateSystem(RE::NiNode* skeleton, RE::NiAVObject* model, DefaultBBP::PhysicsFile_t* file, std::unordered_map<RE::BSFixedString, RE::BSFixedString>&& renameMap, SkyrimSystem* old_system);
 
 	protected:
 		struct BoneTemplate : public btRigidBody::btRigidBodyConstructionInfo
@@ -147,16 +147,16 @@ namespace hdt
 
 		using VertexOffsetMap = std::unordered_map<std::string, int>;
 
-		IDStr getRenamedBone(IDStr name);
+		const RE::BSFixedString& getRenamedBone(const RE::BSFixedString& name);
 
 		RE::BSTSmartPointer<SkyrimSystem> m_mesh;
 		RE::NiNode* m_skeleton;
 		RE::NiAVObject* m_model;
 		XMLReader* m_reader;
-		std::unordered_map<IDStr, IDStr> m_renameMap;
+		std::unordered_map<RE::BSFixedString, RE::BSFixedString> m_renameMap;
 
-		RE::NiNode* findObjectByName(const IDStr& name);
-		SkyrimBone* getOrCreateBone(const IDStr& name);
+		RE::NiNode* findObjectByName(const RE::BSFixedString& name);
+		SkyrimBone* getOrCreateBone(const RE::BSFixedString& name);
 
 		std::string m_filePath;
 
@@ -169,7 +169,7 @@ namespace hdt
 
 		std::pair<RE::BSTSmartPointer<SkyrimBody>, VertexOffsetMap> generateMeshBody(const std::string name, DefaultBBP::NameSet_t* names);
 
-		bool findBones(const IDStr& bodyAName, const IDStr& bodyBName, SkyrimBone*& bodyA, SkyrimBone*& bodyB);
+		bool findBones(const RE::BSFixedString& bodyAName, const RE::BSFixedString& bodyBName, SkyrimBone*& bodyA, SkyrimBone*& bodyB);
 		bool parseFrameType(const std::string& name, FrameType& type, btTransform& frame);
 		static void calcFrame(FrameType type, const btTransform& frame, const btQsTransform& trA, const btQsTransform& trB, btTransform& frameA, btTransform& frameB);
 		void readFrameLerp(btTransform& tr);
@@ -183,7 +183,7 @@ namespace hdt
 		const StiffSpringConstraintTemplate& getStiffSpringConstraintTemplate(const IDStr& name);
 		const ConeTwistConstraintTemplate& getConeTwistConstraintTemplate(const IDStr& name);
 
-		SkyrimBone* createBoneFromNodeName(const IDStr& bodyName, const IDStr& templateName = "", const bool readTemplate = false, SkyrimSystem* old_system = nullptr);
+		SkyrimBone* createBoneFromNodeName(const RE::BSFixedString& bodyName, const IDStr& templateName = "", const bool readTemplate = false, SkyrimSystem* old_system = nullptr);
 		void readOrUpdateBone(SkyrimSystem* old_system = nullptr);
 		RE::BSTSmartPointer<SkyrimBody> readPerVertexShape(DefaultBBP::NameMap_t meshNameMap);
 		RE::BSTSmartPointer<SkyrimBody> readPerTriangleShape(DefaultBBP::NameMap_t* meshNameMap);

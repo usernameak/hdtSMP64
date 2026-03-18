@@ -13,10 +13,10 @@ namespace hdt
 	{
 		BT_DECLARE_ALIGNED_ALLOCATOR();
 
-		SkinnedMeshBone(const IDStr& name, btRigidBody::btRigidBodyConstructionInfo& ci);
+		SkinnedMeshBone(const RE::BSFixedString& name, btRigidBody::btRigidBodyConstructionInfo& ci);
 		virtual ~SkinnedMeshBone();
 
-		IDStr m_name;
+		RE::BSFixedString m_name;
 		float m_marginMultipler;
 		float m_boudingSphereMultipler = 1.0f;
 		float m_gravityFactor = 1.0f;
@@ -29,8 +29,8 @@ namespace hdt
 		btQsTransform m_origTransform;
 		btQsTransform m_origToSkeletonTransform;
 
-		std::vector<IDStr> m_canCollideWithBone;
-		std::vector<IDStr> m_noCollideWithBone;
+		std::vector<RE::BSFixedString> m_canCollideWithBone;
+		std::vector<RE::BSFixedString> m_noCollideWithBone;
 
 		virtual void resetTransformToOriginal() = 0;
 		virtual void readTransform(float timeStep) = 0;

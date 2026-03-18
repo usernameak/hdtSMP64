@@ -6,9 +6,9 @@ hdt::ForceUpdateList* hdt::ForceUpdateList::GetSingleton()
 	return &g_forceUpdateNode;
 }
 
-int hdt::ForceUpdateList::isAmong(std::string node_name)
+int hdt::ForceUpdateList::isAmong(const RE::BSFixedString& node_name)
 {
-	if (node_name.find("MOV") == std::string::npos) {
+	if (!node_name.contains("MOV")) {
 		if (m_list.nodes.find(node_name) != m_list.nodes.end()) {
 			return 1;
 		}
@@ -18,11 +18,6 @@ int hdt::ForceUpdateList::isAmong(std::string node_name)
 		}
 	}
 	return 0;
-}
-
-int hdt::ForceUpdateList::isAmong(hdt::IDStr node_name)
-{
-	return isAmong(std::string(node_name->cstr()));
 }
 
 hdt::ForceUpdateList::ForceUpdateList()

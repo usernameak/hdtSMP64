@@ -72,7 +72,7 @@ namespace hdt
 			{
 				RE::NiPointer<RE::BSGeometry> headPart;
 				RE::NiPointer<RE::NiNode> origPartRootNode;
-				std::set<IDStr> renamedBonesInUse;
+				std::unordered_set<RE::BSFixedString> renamedBonesInUse;
 			};
 
 			IDType id;
@@ -81,8 +81,8 @@ namespace hdt
 			RE::NiPointer<RE::BSFadeNode> npcFaceGeomNode;
 			bool npcFaceGeomNodeBroken = false;  // true if isolated NiStream load produced broken VR bone refs
 			std::vector<HeadPart> headParts;
-			std::unordered_map<IDStr, IDStr> renameMap;
-			std::unordered_map<IDStr, uint8_t> nodeUseCount;
+			std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap;
+			std::unordered_map<RE::BSFixedString, uint8_t> nodeUseCount;
 			bool isFullSkinning;
 			bool isActive = true;  // false when hidden by a wig
 		};
@@ -92,7 +92,7 @@ namespace hdt
 			IDType id;
 			RE::BSTSmartPointer<IString> prefix;
 			RE::NiPointer<RE::NiAVObject> armorWorn;
-			std::unordered_map<IDStr, IDStr> renameMap;
+			std::unordered_map<RE::BSFixedString, RE::BSFixedString> renameMap;
 			// @brief This bool is set to true when the first name for the NiAVObject armor is attributed by the Skyrim executable,
 			// and set back to false the name map is fixed (see fixArmorNameMaps()),
 			bool mustFixNameMap = false;
@@ -147,10 +147,10 @@ namespace hdt
 			void scanHead();
 			void processGeometry(RE::BSFaceGenNiNode* head, RE::BSGeometry* geometry);
 
-			static void doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
+			static void doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map);
 			static void doSkeletonClean(RE::NiNode* dst, IString* prefix);
-			static RE::NiNode* cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
-			static void renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<IDStr, IDStr>& map);
+			static RE::NiNode* cloneNodeTree(RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map);
+			static void renameTree(RE::NiNode* root, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map);
 
 			std::vector<Armor>& getArmors() { return armors; }
 
@@ -163,7 +163,7 @@ namespace hdt
 		private:
 			bool isActiveInScene() const;
 			bool checkPhysics();
-			static void doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<IDStr, IDStr>& map, RE::NiNode* dstRoot);
+			static void doSkeletonMerge(RE::NiNode* dst, RE::NiNode* src, IString* prefix, std::unordered_map<RE::BSFixedString, RE::BSFixedString>& map, RE::NiNode* dstRoot);
 
 			bool isActive = false;
 			float currentWindFactor = 0.f;

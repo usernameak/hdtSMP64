@@ -8,14 +8,13 @@ namespace hdt
 	{
 		typedef struct
 		{
-			std::unordered_set<std::string> nodes;
-			std::unordered_set<std::string> nodes_mov;
+			std::unordered_set<RE::BSFixedString> nodes;
+			std::unordered_set<RE::BSFixedString> nodes_mov;
 		} nodeList_t;
 
 	public:
 		static ForceUpdateList* GetSingleton();
-		int isAmong(std::string node_name);
-		int isAmong(hdt::IDStr node_name);
+		int isAmong(const RE::BSFixedString &node_name);
 
 	private:
 		ForceUpdateList();

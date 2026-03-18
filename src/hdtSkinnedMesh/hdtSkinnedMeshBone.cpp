@@ -2,7 +2,7 @@
 
 namespace hdt
 {
-	SkinnedMeshBone::SkinnedMeshBone(const IDStr& name, btRigidBody::btRigidBodyConstructionInfo& ci) :
+	SkinnedMeshBone::SkinnedMeshBone(const RE::BSFixedString& name, btRigidBody::btRigidBodyConstructionInfo& ci) :
 		m_name(name), m_rig(ci)
 	{
 		m_rigToLocal.setIdentity();

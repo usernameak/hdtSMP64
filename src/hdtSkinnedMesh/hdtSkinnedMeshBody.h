@@ -73,7 +73,7 @@ namespace hdt
 			bool isKinematic;
 		};
 
-		IDStr m_name;
+		RE::BSFixedString m_name;
 
 		//		int m_priority;
 		bool m_isKinematic;

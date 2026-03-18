@@ -243,7 +243,7 @@ void SMPDebug_PrintDetailed(bool includeItems)
 					for (auto mesh : armor.meshes()) {
 						RE::ConsoleLog::GetSingleton()->Print(
 							"[HDT-SMP] ---- has collision mesh %s",
-							mesh->m_name->cstr());
+							mesh->m_name.c_str());
 					}
 				}
 			}
@@ -257,7 +257,7 @@ void SMPDebug_PrintDetailed(bool includeItems)
 
 					if (headPart.state() != hdt::ActorManager::ItemState::e_NoPhysics) {
 						for (auto mesh : headPart.meshes()) {
-							RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name->cstr());
+							RE::ConsoleLog::GetSingleton()->Print("[HDT-SMP] ---- has collision mesh %s", mesh->m_name.c_str());
 						}
 					}
 				}
